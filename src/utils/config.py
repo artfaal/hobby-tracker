@@ -14,7 +14,7 @@ SHEET_NAME = os.getenv("SHEET_NAME", "Данные")
 TZ_NAME = os.getenv("TIMEZONE", os.getenv("TZ", "Europe/Moscow"))
 
 # Reminder Configuration
-REMINDER_THRESHOLD = int(os.getenv("REMINDER_THRESHOLD", "6"))
+# Simplified - no threshold needed
 
 # File paths
 HOBBIES_HISTORY_FILE = "data/hobbies_history.txt"

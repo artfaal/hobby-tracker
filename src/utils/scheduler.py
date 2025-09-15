@@ -5,7 +5,7 @@ from apscheduler.triggers.cron import CronTrigger
 from telegram import Bot
 from telegram.error import TelegramError
 
-from .config import TZ_NAME, REMINDER_THRESHOLD
+from .config import TZ_NAME
 from ..data.reminders import get_reminders_for_hour
 from ..data.sheets import SheetsManager
 from ..utils.dates import date_for_time
@@ -56,37 +56,31 @@ class ReminderScheduler:
             today_data = self.sheets.get_day_data(today)
             today_total = sum(today_data.values()) if today_data else 0
             
-            # Формируем сообщение
+            # Формируем сообщение с полной статистикой
             message = "📝 Время записать активности!"
             
             if today_total > 0:
-                # Показываем что уже записано
-                if today_total < REMINDER_THRESHOLD:
-                    # Недостаточно активности
-                    activities = []
-                    for hobby, score in today_data.items():
-                        if score > 0:
-                            from ..data.files import get_hobby_display_name
-                            display_name = get_hobby_display_name(hobby)
-                            activities.append(f"{display_name}:{score}")
-                    
-                    activities_text = ", ".join(activities)
-                    message = (
-                        f"⚠️ Сегодня только {today_total} звезд ({activities_text}). "
-                        f"Может что-то еще делали?\n\n📝 Нажмите /quick для записи!"
-                    )
-                else:
-                    # Достаточно активности, обычное напоминание
-                    message = (
-                        f"📝 Время записать активности! "
-                        f"Сегодня уже {today_total} звезд.\n\n"
-                        f"Нажмите /quick для записи!"
-                    )
+                # Показываем полную статистику
+                activities = []
+                for hobby, score in today_data.items():
+                    if score > 0:
+                        from ..data.files import get_hobby_display_name
+                        display_name = get_hobby_display_name(hobby)
+                        stars = "⭐" * score
+                        activities.append(f"{display_name}: {stars} ({score})")
+                
+                activities_text = "\n".join(activities)
+                message = (
+                    f"📝 Время записать активности!\n\n"
+                    f"📊 Статистика на сегодня:\n{activities_text}\n"
+                    f"🎯 Общий балл: {today_total}\n\n"
+                    f"Нажмите /quick для записи!"
+                )
             else:
                 # Еще ничего не записано
                 message = (
-                    "📝 Время записать активности! "
-                    "Пока не записано ни одной активности.\n\n"
+                    "📝 Время записать активности!\n\n"
+                    "📊 Пока не записано ни одной активности.\n\n"
                     "Нажмите /quick для начала!"
                 )
             

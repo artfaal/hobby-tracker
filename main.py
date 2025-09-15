@@ -14,7 +14,7 @@ from telegram import Update
 
 from src.bot.handlers import (
     start, help_cmd, quick_cmd, stats_cmd, list_all_cmd, reminders_cmd,
-    button_callback, free_text
+    button_callback, text_message_handler
 )
 from src.data.files import create_sample_aliases
 from src.utils.config import BOT_TOKEN
@@ -42,7 +42,7 @@ def main():
     
     # Регистрируем обработчики кнопок и текста
     app.add_handler(CallbackQueryHandler(button_callback))
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, free_text))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_message_handler))
     
     print("✅ Все обработчики зарегистрированы")
     

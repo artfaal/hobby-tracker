@@ -5,14 +5,15 @@ from telegram.ext import ContextTypes
 from .keyboards import (
     create_hobby_keyboard, create_score_keyboard, create_date_keyboard,
     create_all_hobbies_keyboard, create_stats_keyboard, create_quick_date_keyboard,
-    create_reminders_keyboard, create_add_reminder_keyboard, create_delete_reminder_keyboard
+    create_reminders_keyboard, create_add_reminder_keyboard, create_delete_reminder_keyboard,
+    create_settings_keyboard, create_aliases_keyboard, create_aliases_list_keyboard
 )
 from .messages import (
     HELP_TEXT, STAR_EXPLANATION, format_hobby_stars_result, 
     format_stats_message, get_date_display_name
 )
 from ..data.files import (
-    save_hobby_to_history, get_all_hobbies, get_hobby_display_name
+    save_hobby_to_history, get_all_hobbies, get_hobby_display_name, get_all_aliases, add_alias
 )
 from ..data.reminders import (
     add_reminder, remove_reminder, get_user_reminders
@@ -87,6 +88,21 @@ async def list_all_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(message)
 
 
+async def reminders_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик команды /reminders - настройка напоминаний"""
+    user_id = update.message.from_user.id
+    keyboard = create_reminders_keyboard(user_id)
+    user_reminders = get_user_reminders(user_id)
+    
+    if user_reminders:
+        reminders_text = ", ".join([f"{h:02d}:00" for h in sorted(user_reminders)])
+        message = f"⏰ Ваши напоминания: {reminders_text}"
+    else:
+        message = "⏰ У вас пока нет напоминаний"
+    
+    await update.message.reply_text(message, reply_markup=keyboard)
+
+
 
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -125,6 +141,10 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_add_reminder(query, user_id, data)
     elif data.startswith("delete_reminder"):
         await handle_delete_reminder(query, user_id, data)
+    elif data == "settings":
+        await handle_settings(query)
+    elif data.startswith("aliases"):
+        await handle_aliases(query, user_id, data)
 
 
 async def handle_hobby_selection(query, user_id: int, data: str):
@@ -435,3 +455,100 @@ async def handle_delete_reminder(query, user_id: int, data: str):
     
     keyboard = create_reminders_keyboard(user_id)
     await query.edit_message_text(message, reply_markup=keyboard)
+
+
+async def handle_settings(query):
+    """Обработка меню настроек"""
+    keyboard = create_settings_keyboard()
+    await query.edit_message_text(
+        "⚙️ Настройки бота:",
+        reply_markup=keyboard
+    )
+
+
+async def handle_aliases(query, user_id: int, data: str):
+    """Обработка управления алиасами"""
+    if data == "aliases":
+        keyboard = create_aliases_keyboard()
+        await query.edit_message_text(
+            "📝 Управление алиасами:",
+            reply_markup=keyboard
+        )
+    
+    elif data == "aliases_list":
+        aliases = get_all_aliases()
+        keyboard = create_aliases_list_keyboard()
+        
+        if aliases:
+            # Группируем алиасы по hobby_key для отображения
+            aliases_by_hobby = {}
+            for hobby_key, display_name in aliases:
+                if hobby_key not in aliases_by_hobby:
+                    aliases_by_hobby[hobby_key] = []
+                aliases_by_hobby[hobby_key].append(display_name)
+            
+            message_lines = ["📋 Все алиасы:\n"]
+            for hobby_key, display_names in aliases_by_hobby.items():
+                display_text = ", ".join(display_names)
+                message_lines.append(f"• {hobby_key} → {display_text}")
+            
+            message = "\n".join(message_lines)
+        else:
+            message = "📋 У вас пока нет алиасов"
+        
+        await query.edit_message_text(message, reply_markup=keyboard)
+    
+    elif data == "aliases_add":
+        user_states[user_id] = "awaiting_alias"
+        await query.edit_message_text(
+            "➕ Добавление нового алиаса\n\n"
+            "Отправьте сообщение в формате:\n"
+            "`название_хобби = Красивое название`\n\n"
+            "Например:\n"
+            "`программирование = 💻 Программирование`",
+            parse_mode="Markdown"
+        )
+    
+    elif data == "aliases_noop":
+        # Ничего не делаем для информационных кнопок
+        pass
+
+
+async def text_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик текстовых сообщений (для алиасов)"""
+    user_id = update.message.from_user.id
+    text = update.message.text.strip()
+    
+    if user_id in user_states and user_states[user_id] == "awaiting_alias":
+        # Обрабатываем добавление алиаса
+        if "=" in text:
+            parts = text.split("=", 1)
+            hobby_key = parts[0].strip()
+            display_name = parts[1].strip()
+            
+            if hobby_key and display_name:
+                success = add_alias(hobby_key, display_name)
+                if success:
+                    keyboard = create_aliases_keyboard()
+                    await update.message.reply_text(
+                        f"✅ Алиас добавлен!\n\n"
+                        f"• {hobby_key} → {display_name}",
+                        reply_markup=keyboard
+                    )
+                else:
+                    await update.message.reply_text("❌ Ошибка при добавлении алиаса")
+            else:
+                await update.message.reply_text(
+                    "❌ Неправильный формат. Используйте:\n"
+                    "`название_хобби = Красивое название`",
+                    parse_mode="Markdown"
+                )
+        else:
+            await update.message.reply_text(
+                "❌ Неправильный формат. Используйте:\n"
+                "`название_хобби = Красивое название`",
+                parse_mode="Markdown"
+            )
+        
+        # Сбрасываем состояние
+        user_states.pop(user_id, None)

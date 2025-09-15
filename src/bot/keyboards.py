@@ -1,7 +1,7 @@
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from typing import List
 
-from ..data.files import get_recent_hobbies, get_all_hobbies, get_hobby_display_name
+from ..data.files import get_recent_hobbies, get_all_hobbies, get_hobby_display_name, get_all_aliases, add_alias
 from ..data.reminders import get_user_reminders
 from ..utils.dates import get_date_list
 
@@ -41,7 +41,7 @@ def create_hobby_keyboard(show_today_button: bool = False) -> InlineKeyboardMark
     
     buttons.append([
         InlineKeyboardButton("📊 Статистика", callback_data="stats"),
-        InlineKeyboardButton("⏰ Напоминания", callback_data="reminders")
+        InlineKeyboardButton("⚙️ Настройки", callback_data="settings")
     ])
     
     return InlineKeyboardMarkup(buttons)
@@ -146,7 +146,7 @@ def create_reminders_keyboard(user_id: int) -> InlineKeyboardMarkup:
     if user_reminders:
         buttons.append([InlineKeyboardButton("🗑️ Удалить напоминание", callback_data="reminders_delete")])
     
-    buttons.append([InlineKeyboardButton("← Назад", callback_data="back_to_hobbies")])
+    buttons.append([InlineKeyboardButton("← Назад", callback_data="settings")])
     return InlineKeyboardMarkup(buttons)
 
 
@@ -179,4 +179,52 @@ def create_delete_reminder_keyboard(user_id: int) -> InlineKeyboardMarkup:
         buttons.append([InlineKeyboardButton("❌ Нет напоминаний", callback_data="reminders")])
     
     buttons.append([InlineKeyboardButton("← Назад", callback_data="reminders")])
+    return InlineKeyboardMarkup(buttons)
+
+
+def create_settings_keyboard() -> InlineKeyboardMarkup:
+    """Создает клавиатуру настроек"""
+    buttons = [
+        [InlineKeyboardButton("⏰ Напоминания", callback_data="reminders")],
+        [InlineKeyboardButton("📝 Алиасы", callback_data="aliases")],
+        [InlineKeyboardButton("← Назад", callback_data="back_to_hobbies")]
+    ]
+    return InlineKeyboardMarkup(buttons)
+
+
+def create_aliases_keyboard() -> InlineKeyboardMarkup:
+    """Создает клавиатуру управления алиасами"""
+    buttons = [
+        [InlineKeyboardButton("📋 Показать все алиасы", callback_data="aliases_list")],
+        [InlineKeyboardButton("➕ Добавить алиас", callback_data="aliases_add")],
+        [InlineKeyboardButton("← Назад", callback_data="settings")]
+    ]
+    return InlineKeyboardMarkup(buttons)
+
+
+def create_aliases_list_keyboard() -> InlineKeyboardMarkup:
+    """Создает клавиатуру со списком всех алиасов"""
+    buttons = []
+    aliases = get_all_aliases()
+    
+    if aliases:
+        # Группируем алиасы по hobby_key
+        aliases_by_hobby = {}
+        for hobby_key, display_name in aliases:
+            if hobby_key not in aliases_by_hobby:
+                aliases_by_hobby[hobby_key] = []
+            aliases_by_hobby[hobby_key].append(display_name)
+        
+        # Создаем кнопки для каждого увлечения с его алиасами
+        for hobby_key, display_names in aliases_by_hobby.items():
+            display_text = ", ".join(display_names)
+            text = f"{hobby_key} → {display_text}"
+            # Обрезаем слишком длинные строки для кнопки
+            if len(text) > 35:
+                text = text[:32] + "..."
+            buttons.append([InlineKeyboardButton(text, callback_data="aliases_noop")])
+    else:
+        buttons.append([InlineKeyboardButton("❌ Нет алиасов", callback_data="aliases_noop")])
+    
+    buttons.append([InlineKeyboardButton("← Назад", callback_data="aliases")])
     return InlineKeyboardMarkup(buttons)

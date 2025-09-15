@@ -48,6 +48,24 @@ def get_hobby_display_name(hobby_name: str) -> str:
     return f"📌 {hobby_name.capitalize()}"
 
 
+def get_all_aliases() -> list[tuple[str, str]]:
+    """Получает все алиасы в виде списка (alias, hobby_key)"""
+    aliases = load_aliases()
+    return [(hobby_key, display_name) for hobby_key, display_name in aliases.items()]
+
+
+def add_alias(hobby_key: str, display_name: str) -> bool:
+    """Добавляет новый алиас. Возвращает True если успешно"""
+    if not hobby_key.strip() or not display_name.strip():
+        return False
+    
+    aliases = load_aliases()
+    norm_key = norm_hobby(hobby_key)
+    aliases[norm_key] = display_name.strip()
+    save_aliases(aliases)
+    return True
+
+
 def get_recent_hobbies(limit: int = 20) -> list[str]:
     """Загружает последние использованные увлечения из файла"""
     if not os.path.exists(HOBBIES_HISTORY_FILE):
