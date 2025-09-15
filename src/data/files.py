@@ -98,15 +98,68 @@ def save_hobby_to_history(hobby_name: str) -> None:
 
 
 def create_sample_aliases() -> None:
-    """Создает пример файла алиасов при первом запуске"""
+    """Создает файлы данных при первом запуске"""
+    # Создаем папку data если её нет
+    os.makedirs(os.path.dirname(ALIASES_FILE), exist_ok=True)
+    
+    # Создаем aliases.txt если его нет
     if not os.path.exists(ALIASES_FILE):
-        sample_aliases = {
-            "программирование": "💻 Программирование",
-            "ютуб": "📺 YouTube",
-            "чтение": "📚 Чтение", 
-            "спорт": "🏃 Спорт",
-            "музыка": "🎵 Музыка",
-            "игры": "🎮 Игры",
-            "мото": "🏍️ Мото"
-        }
-        save_aliases(sample_aliases)
+        example_file = ALIASES_FILE + ".example"
+        if os.path.exists(example_file):
+            # Копируем из примера
+            try:
+                import shutil
+                shutil.copy2(example_file, ALIASES_FILE)
+                print(f"✅ Создан {ALIASES_FILE} из примера")
+            except Exception:
+                # Если копирование не удалось, создаем базовые алиасы
+                sample_aliases = {
+                    "программирование": "💻 Программирование",
+                    "ютуб": "📺 YouTube", 
+                    "чтение": "📚 Чтение",
+                    "спорт": "🏃 Спорт",
+                    "музыка": "🎵 Музыка",
+                    "игры": "🎮 Игры",
+                    "мото": "🏍️ Мото"
+                }
+                save_aliases(sample_aliases)
+                print(f"✅ Создан {ALIASES_FILE} с базовыми алиасами")
+        else:
+            # Создаем базовые алиасы если нет примера
+            sample_aliases = {
+                "программирование": "💻 Программирование",
+                "ютуб": "📺 YouTube",
+                "чтение": "📚 Чтение", 
+                "спорт": "🏃 Спорт",
+                "музыка": "🎵 Музыка",
+                "игры": "🎮 Игры",
+                "мото": "🏍️ Мото"
+            }
+            save_aliases(sample_aliases)
+            print(f"✅ Создан {ALIASES_FILE} с базовыми алиасами")
+    
+    # Создаем hobbies_history.txt если его нет
+    if not os.path.exists(HOBBIES_HISTORY_FILE):
+        example_file = HOBBIES_HISTORY_FILE + ".example"
+        if os.path.exists(example_file):
+            # Копируем из примера
+            try:
+                import shutil
+                shutil.copy2(example_file, HOBBIES_HISTORY_FILE)
+                print(f"✅ Создан {HOBBIES_HISTORY_FILE} из примера")
+            except Exception:
+                # Создаем пустой файл
+                try:
+                    with open(HOBBIES_HISTORY_FILE, 'w', encoding='utf-8') as f:
+                        f.write("")
+                    print(f"✅ Создан пустой {HOBBIES_HISTORY_FILE}")
+                except Exception:
+                    pass
+        else:
+            # Создаем пустой файл если нет примера
+            try:
+                with open(HOBBIES_HISTORY_FILE, 'w', encoding='utf-8') as f:
+                    f.write("")
+                print(f"✅ Создан пустой {HOBBIES_HISTORY_FILE}")
+            except Exception:
+                pass

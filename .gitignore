@@ -1,3 +1,6 @@
 .env
 .env.bak
 service_account.json
+
+# Data files (user-editable, keep as examples only)
+data/*.txt
