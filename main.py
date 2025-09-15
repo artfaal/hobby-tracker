@@ -1,6 +1,7 @@
 import os
 import re
 import time
+import asyncio
 import datetime as dt
 from collections import defaultdict
 
@@ -30,25 +31,28 @@ except Exception:
     TZ = None
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Конфигурация увлечений
+# Конфигурация файлов и состояния
 # ──────────────────────────────────────────────────────────────────────────────
-# Базовые увлечения с их отображаемыми названиями
-HOBBIES = {
-    "программирование": "💻 Программирование",
-    "ютуб": "📺 YouTube", 
-    "чтение": "📚 Чтение",
-    "спорт": "🏃 Спорт",
-    "музыка": "🎵 Музыка",
-    "игры": "🎮 Игры",
-    "изучение": "📖 Изучение",
-    "рисование": "🎨 Рисование"
-}
-
 # Состояние пользователей (в реальном приложении лучше использовать Redis/DB)
 user_states = {}
 
-# Файл для хранения истории увлечений
+# Файлы для хранения данных
 HOBBIES_HISTORY_FILE = "hobbies_history.txt"
+ALIASES_FILE = "aliases.txt"
+
+# Пример начального файла aliases.txt для красивого отображения
+def create_sample_aliases():
+    if not os.path.exists(ALIASES_FILE):
+        sample_aliases = {
+            "программирование": "💻 Программирование",
+            "ютуб": "📺 YouTube",
+            "чтение": "📚 Чтение",
+            "спорт": "🏃 Спорт",
+            "музыка": "🎵 Музыка",
+            "игры": "🎮 Игры",
+            "мото": "🏍️ Мото"
+        }
+        save_aliases(sample_aliases)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Подключение к Google Sheets через service_account.json
@@ -88,10 +92,42 @@ def date_for_time(target_hour=6):
         return yesterday.date().isoformat()
     return now.date().isoformat()
 
+def load_aliases():
+    # Загружает алиасы для отображения увлечений
+    aliases = {}
+    if os.path.exists(ALIASES_FILE):
+        try:
+            with open(ALIASES_FILE, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if '=' in line:
+                        hobby_name, display_name = line.split('=', 1)
+                        aliases[hobby_name.strip().lower()] = display_name.strip()
+        except Exception:
+            pass
+    return aliases
+
+def save_aliases(aliases):
+    # Сохраняет алиасы в файл
+    try:
+        with open(ALIASES_FILE, 'w', encoding='utf-8') as f:
+            for hobby_name, display_name in aliases.items():
+                f.write(f"{hobby_name}={display_name}\n")
+    except Exception:
+        pass
+
+def get_hobby_display_name(hobby_name):
+    # Получает красивое название увлечения для отображения
+    aliases = load_aliases()
+    norm_name = norm_hobby(hobby_name)
+    if norm_name in aliases:
+        return aliases[norm_name]
+    return f"📌 {hobby_name.capitalize()}"
+
 def get_recent_hobbies(limit=20):
     # Загружает последние использованные увлечения из файла
     if not os.path.exists(HOBBIES_HISTORY_FILE):
-        return list(HOBBIES.keys())
+        return []
     
     try:
         with open(HOBBIES_HISTORY_FILE, 'r', encoding='utf-8') as f:
@@ -105,14 +141,13 @@ def get_recent_hobbies(limit=20):
                 seen.add(hobby)
                 unique_recent.append(hobby)
         
-        # Добавляем базовые увлечения, которых нет в истории
-        for base_hobby in HOBBIES.keys():
-            if base_hobby not in seen:
-                unique_recent.append(base_hobby)
-        
         return unique_recent[:limit]
     except Exception:
-        return list(HOBBIES.keys())
+        return []
+
+def get_all_hobbies():
+    # Получает все увлечения из истории
+    return get_recent_hobbies(limit=1000)
 
 def save_hobby_to_history(hobby_name):
     # Сохраняет увлечение в начало файла истории
@@ -151,106 +186,7 @@ def get_day_total(target_date):
     except Exception:
         return 0
 
-def get_day_stars(target_date):
-    # Получает звезды всех увлечений за указанную дату (обратное преобразование из баллов)
-    try:
-        dates = ws.col_values(1)
-        headers = ws.row_values(1)
-        
-        for i, date_str in enumerate(dates, start=1):
-            if date_str == target_date:
-                row_values = ws.row_values(i)
-                stars_dict = {}
-                total_score = 0
-                
-                # Сначала получаем все баллы
-                scores = {}
-                for j, val in enumerate(row_values[1:], start=1):  # Пропускаем колонку даты
-                    if j < len(headers) and val:
-                        try:
-                            header = headers[j]
-                            score = float(val.replace(',', '.'))
-                            scores[header] = score
-                            total_score += score
-                        except ValueError:
-                            continue
-                
-                # Преобразуем баллы обратно в звезды (приблизительно)
-                if total_score > 0:
-                    for header, score in scores.items():
-                        # Приблизительное восстановление звезд из пропорции
-                        proportion = score / total_score
-                        estimated_stars = max(1, round(proportion * 15))  # Предполагаем макс 15 звезд на день
-                        stars_dict[norm_hobby(header)] = min(5, estimated_stars)
-                
-                return stars_dict
-        return {}
-    except Exception:
-        return {}
 
-def redistribute_scores(new_hobby, new_score, target_date):
-    # Перераспределяет оценки так, чтобы сумма была 10
-    try:
-        dates = ws.col_values(1)
-        headers = ws.row_values(1)
-        
-        # Находим строку с нужной датой
-        row_idx = None
-        for i, date_str in enumerate(dates, start=1):
-            if date_str == target_date:
-                row_idx = i
-                break
-        
-        if not row_idx:
-            return {new_hobby: new_score}
-        
-        # Получаем текущие значения
-        row_values = ws.row_values(row_idx)
-        current_values = {}
-        
-        for j, header in enumerate(headers):
-            if j == 0:  # Пропускаем колонку даты
-                continue
-            
-            norm_header = norm_hobby(header)
-            if j < len(row_values) and row_values[j]:
-                try:
-                    current_values[norm_header] = float(row_values[j].replace(',', '.'))
-                except ValueError:
-                    current_values[norm_header] = 0
-            else:
-                current_values[norm_header] = 0
-        
-        # Обновляем значение нового увлечения
-        current_values[norm_hobby(new_hobby)] = float(new_score)
-        
-        # Считаем текущую сумму
-        total = sum(current_values.values())
-        
-        if total == 0:
-            return {new_hobby: new_score}
-        
-        # Если сумма не равна 10, перераспределяем
-        if abs(total - 10) > 0.01:
-            scale_factor = 10.0 / total
-            for hobby in current_values:
-                current_values[hobby] = round(current_values[hobby] * scale_factor, 1)
-        
-        # Преобразуем обратно в оригинальные названия
-        result = {}
-        for header in headers[1:]:  # Пропускаем колонку даты
-            norm_header = norm_hobby(header)
-            if norm_header in current_values:
-                result[header] = current_values[norm_header]
-        
-        # Добавляем новое увлечение, если его нет в заголовках
-        if norm_hobby(new_hobby) not in [norm_hobby(h) for h in headers[1:]]:
-            result[new_hobby] = current_values[norm_hobby(new_hobby)]
-        
-        return result
-        
-    except Exception:
-        return {new_hobby: new_score}
 
 def norm_hobby(name: str) -> str:
     # Нормируем название хобби для сопоставления с заголовками
@@ -357,17 +293,21 @@ def write_values(values: dict[str, float]) -> tuple[list[str], int]:
 # Хэндлеры бота
 # ──────────────────────────────────────────────────────────────────────────────
 HELP_TEXT = (
-    "Привет! Я бот учёта увлечений (шкала 0–10).\n\n"
+    "Привет! Я бот учёта увлечений со звездочками ⭐\n\n"
     "Команды:\n"
     "/start — приветствие\n"
     "/help — помощь\n"
     "/quick — быстрый ввод через кнопки 🚀\n"
+    "/list — показать все увлечения 📋\n"
     "/log <данные> — записать оценки за сегодня\n"
     "  Примеры:\n"
     "  /log чтение 7 спорт 4 музыка 0\n"
     "  /log чтение:7, спорт=4; музыка 0\n\n"
-    "Свободный ввод сообщений без /log тоже работает — я попытаюсь распознать пары «хобби число».\n"
-    "Новые увлечения можно указывать сразу — я добавлю колонку автоматически.\n"
+    "⭐ Система звезд:\n"
+    "⭐ = минимальный приоритет\n"
+    "⭐⭐⭐ = средний приоритет\n"
+    "⭐⭐⭐⭐⭐ = максимальный приоритет\n\n"
+    "Новые увлечения можно добавлять прямо через /quick!"
 )
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -390,22 +330,29 @@ async def quick_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 def create_hobby_keyboard():
     buttons = []
-    recent_hobbies = get_recent_hobbies()
+    recent_hobbies = get_recent_hobbies(limit=10)  # Только последние 10
     
-    # Создаем кнопки по 2 в ряд
-    for i in range(0, len(recent_hobbies), 2):
-        row = []
-        for j in range(i, min(i + 2, len(recent_hobbies))):
-            hobby_key = recent_hobbies[j]
-            hobby_display = HOBBIES.get(hobby_key, f"📌 {hobby_key.capitalize()}")
-            row.append(InlineKeyboardButton(hobby_display, callback_data=f"hobby:{hobby_key}"))
-        buttons.append(row)
+    if not recent_hobbies:
+        # Если нет истории, показываем кнопку для добавления
+        buttons.append([InlineKeyboardButton("➕ Добавить первое увлечение", callback_data="add_new")])
+    else:
+        # Создаем кнопки по 2 в ряд
+        for i in range(0, len(recent_hobbies), 2):
+            row = []
+            for j in range(i, min(i + 2, len(recent_hobbies))):
+                hobby_key = recent_hobbies[j]
+                hobby_display = get_hobby_display_name(hobby_key)
+                row.append(InlineKeyboardButton(hobby_display, callback_data=f"hobby:{hobby_key}"))
+            buttons.append(row)
     
     # Кнопки управления
-    buttons.append([
-        InlineKeyboardButton("➕ Добавить новое", callback_data="add_new"),
-        InlineKeyboardButton("📅 Выбрать дату", callback_data="select_date")
-    ])
+    management_row = []
+    if recent_hobbies:
+        management_row.append(InlineKeyboardButton("📋 Все увлечения", callback_data="list_all"))
+    management_row.append(InlineKeyboardButton("➕ Добавить новое", callback_data="add_new"))
+    
+    buttons.append(management_row)
+    buttons.append([InlineKeyboardButton("📅 Выбрать дату", callback_data="select_date")])
     
     return InlineKeyboardMarkup(buttons)
 
@@ -435,22 +382,6 @@ def create_score_keyboard(hobby_name: str, target_date: str = None):
     
     return InlineKeyboardMarkup(buttons)
 
-def stars_to_score(stars_dict):
-    # Конвертирует звезды в 10-бальную систему с пропорциональным распределением
-    if not stars_dict:
-        return {}
-    
-    total_stars = sum(stars_dict.values())
-    if total_stars == 0:
-        return {hobby: 0 for hobby in stars_dict}
-    
-    # Распределяем 10 баллов пропорционально звездам
-    result = {}
-    for hobby, stars in stars_dict.items():
-        score = round((stars / total_stars) * 10, 1)
-        result[hobby] = score
-    
-    return result
 
 def create_date_keyboard():
     buttons = []
@@ -482,7 +413,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if data.startswith("hobby:"):
         hobby_key = data.split(":", 1)[1]
-        hobby_display = HOBBIES.get(hobby_key, hobby_key.capitalize())
+        hobby_display = get_hobby_display_name(hobby_key)
         
         # Получаем выбранную дату из состояния пользователя
         target_date = date_for_time()
@@ -510,53 +441,40 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             # Сохраняем увлечение в историю
             save_hobby_to_history(hobby_key)
             
-            # Получаем текущие звезды для этой даты
-            current_stars = get_day_stars(target_date)
-            current_stars[hobby_key] = stars
+            # Простая система: звезды = баллы (1:1)
+            # Просто записываем количество звезд как баллы
+            score_values = {hobby_key: stars}
             
-            # Конвертируем звезды в баллы
-            score_values = stars_to_score(current_stars)
-            
-            # Записываем в Google Sheets с нужной датой
-            old_today_str = globals()['today_str']
-            globals()['today_str'] = lambda: target_date
-            try:
-                headers, row_idx = write_values(score_values)
-            finally:
-                globals()['today_str'] = old_today_str
-            
-            hobby_display = HOBBIES.get(hobby_key, hobby_key.capitalize())
+            # Быстрый отклик: показываем короткое подтверждение
+            hobby_display = get_hobby_display_name(hobby_key)
             stars_display = "⭐" * stars if stars > 0 else "❌"
             
-            # Получаем общую сумму
-            total_score = sum(score_values.values())
-            total_stars = sum(current_stars.values())
+            # Показываем простое подтверждение  
+            result_text = f"✅ {stars_display} {hobby_display} = {stars} балл"
+            if stars != 1:
+                result_text += "ов" if stars in [0, 5, 6, 7, 8, 9, 10] else "а"
             
-            # Формируем сообщение с результатами
-            result_lines = [f"✅ Записано: {stars_display} {hobby_display}!", f"📅 Дата: {target_date}", ""]
+            await query.edit_message_text(result_text)
             
-            # Показываем все увлечения за день со звездами и баллами
-            for h, score in score_values.items():
-                if h in current_stars and current_stars[h] > 0:
-                    display_name = HOBBIES.get(h, h.capitalize())
-                    hobby_stars = current_stars[h]
-                    stars_emoji = "⭐" * hobby_stars
-                    emoji = "🔥" if h == hobby_key else "📊"
-                    result_lines.append(f"{emoji} {display_name}: {stars_emoji} ({score:g} б.)")
+            # Мгновенно возвращаемся к списку увлечений
+            keyboard = create_hobby_keyboard()
             
-            result_lines.append(f"\n🌟 Всего звезд: {total_stars}")
-            result_lines.append(f"🎯 Общий балл: {total_score:g}/10")
-            result_lines.append(f"\n📊 [Открыть Google Sheets](https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID})")
-            
-            keyboard = InlineKeyboardMarkup([
-                [InlineKeyboardButton("➕ Добавить еще", callback_data="back_to_hobbies")]
-            ])
-            
+            # Показываем список снова через 0.5 секунды
+            await asyncio.sleep(0.5)
             await query.edit_message_text(
-                "\n".join(result_lines),
-                reply_markup=keyboard,
-                parse_mode='Markdown'
+                "🚀 Выберите следующее увлечение:",
+                reply_markup=keyboard
             )
+            
+            # Записываем в Google Sheets в фоне
+            try:
+                old_today_str = globals()['today_str']
+                globals()['today_str'] = lambda: target_date
+                write_values(score_values)
+            except Exception:
+                pass  # Игнорируем ошибки Google Sheets для скорости
+            finally:
+                globals()['today_str'] = old_today_str
     
     elif data.startswith("date:"):
         selected_date = data.split(":", 1)[1]
@@ -575,12 +493,30 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reply_markup=keyboard
         )
     
-    elif data == "back_to_hobbies":
-        keyboard = create_hobby_keyboard()
-        await query.edit_message_text(
-            "🚀 Выберите увлечение:",
-            reply_markup=keyboard
-        )
+    elif data == "list_all":
+        all_hobbies = get_all_hobbies()
+        if not all_hobbies:
+            await query.edit_message_text(
+                "📋 Пока нет увлечений в истории."
+            )
+        else:
+            # Показываем список с кнопками для выбора
+            buttons = []
+            for i in range(0, len(all_hobbies), 2):
+                row = []
+                for j in range(i, min(i + 2, len(all_hobbies))):
+                    hobby_key = all_hobbies[j]
+                    hobby_display = get_hobby_display_name(hobby_key)
+                    row.append(InlineKeyboardButton(hobby_display, callback_data=f"hobby:{hobby_key}"))
+                buttons.append(row)
+            
+            buttons.append([InlineKeyboardButton("← Назад", callback_data="back_to_hobbies")])
+            keyboard = InlineKeyboardMarkup(buttons)
+            
+            await query.edit_message_text(
+                f"📋 Все ваши увлечения ({len(all_hobbies)}):",
+                reply_markup=keyboard
+            )
     
     elif data == "add_new":
         # Получаем выбранную дату из состояния пользователя
@@ -592,6 +528,34 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text(
             "✏️ Напишите название нового увлечения:"
         )
+    
+    elif data == "back_to_hobbies":
+        keyboard = create_hobby_keyboard()
+        await query.edit_message_text(
+            "🚀 Выберите увлечение:",
+            reply_markup=keyboard
+        )
+    
+async def list_all_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    all_hobbies = get_all_hobbies()
+    if not all_hobbies:
+        await update.message.reply_text(
+            "📋 Пока нет увлечений в истории.\n\n"
+            "Используйте /quick чтобы добавить первое увлечение!"
+        )
+    else:
+        hobbies_text = "\n".join([f"• {get_hobby_display_name(h)}" for h in all_hobbies])
+        message = f"📋 Все ваши увлечения ({len(all_hobbies)}):\n\n{hobbies_text}"
+        
+        # Разбиваем на части, если сообщение слишком длинное
+        if len(message) > 4000:
+            # Отображаем только первые 30 увлечений
+            hobbies_text = "\n".join([f"• {get_hobby_display_name(h)}" for h in all_hobbies[:30]])
+            message = f"📋 Ваши увлечения ({len(all_hobbies)}):\n\n{hobbies_text}"
+            if len(all_hobbies) > 30:
+                message += f"\n\n... и ещё {len(all_hobbies) - 30} увлечений"
+        
+        await update.message.reply_text(message)
 
 async def free_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.message.from_user.id
@@ -649,10 +613,14 @@ async def process_log(update: Update, payload: str, silent_on_fail: bool=False):
     await update.message.reply_text("\n".join(lines))
 
 def main():
+    # Создаем пример файла алиасов при первом запуске
+    create_sample_aliases()
+    
     app = Application.builder().token(BOT_TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_cmd))
     app.add_handler(CommandHandler("quick", quick_cmd))
+    app.add_handler(CommandHandler("list", list_all_cmd))
     app.add_handler(CommandHandler("log", log_cmd))
     app.add_handler(CallbackQueryHandler(button_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, free_text))
