@@ -4,7 +4,8 @@ from telegram.ext import ContextTypes
 
 from .keyboards import (
     create_hobby_keyboard, create_score_keyboard, create_date_keyboard,
-    create_all_hobbies_keyboard, create_stats_keyboard, create_quick_date_keyboard
+    create_all_hobbies_keyboard, create_stats_keyboard, create_quick_date_keyboard,
+    create_reminders_keyboard, create_add_reminder_keyboard, create_delete_reminder_keyboard
 )
 from .messages import (
     HELP_TEXT, STAR_EXPLANATION, format_hobby_stars_result, 
@@ -12,6 +13,9 @@ from .messages import (
 )
 from ..data.files import (
     save_hobby_to_history, get_all_hobbies, get_hobby_display_name
+)
+from ..data.reminders import (
+    add_reminder, remove_reminder, get_user_reminders
 )
 from ..data.sheets import SheetsManager
 from ..utils.dates import date_for_time
@@ -115,6 +119,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_back_to_hobbies(query)
     elif data == "today":
         await handle_today_selection(query, user_id)
+    elif data.startswith("reminder"):
+        await handle_reminders(query, user_id, data)
+    elif data.startswith("add_reminder"):
+        await handle_add_reminder(query, user_id, data)
+    elif data.startswith("delete_reminder"):
+        await handle_delete_reminder(query, user_id, data)
 
 
 async def handle_hobby_selection(query, user_id: int, data: str):
@@ -342,3 +352,86 @@ async def free_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
         "Используйте /quick для быстрого заполнения увлечений через кнопки!"
     )
+
+
+async def reminders_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик команды /reminders - управление напоминаниями"""
+    user_id = update.message.from_user.id
+    keyboard = create_reminders_keyboard(user_id)
+    user_reminders = get_user_reminders(user_id)
+    
+    if user_reminders:
+        reminders_text = ", ".join([f"{h:02d}:00" for h in sorted(user_reminders)])
+        message = f"⏰ Ваши напоминания: {reminders_text}"
+    else:
+        message = "⏰ У вас пока нет напоминаний"
+    
+    await update.message.reply_text(message, reply_markup=keyboard)
+
+
+async def handle_reminders(query, user_id: int, data: str):
+    """Обработка управления напоминаниями"""
+    if data == "reminders":
+        keyboard = create_reminders_keyboard(user_id)
+        user_reminders = get_user_reminders(user_id)
+        
+        if user_reminders:
+            reminders_text = ", ".join([f"{h:02d}:00" for h in sorted(user_reminders)])
+            message = f"⏰ Ваши напоминания: {reminders_text}"
+        else:
+            message = "⏰ У вас пока нет напоминаний"
+        
+        await query.edit_message_text(message, reply_markup=keyboard)
+    
+    elif data == "reminders_list":
+        user_reminders = sorted(get_user_reminders(user_id))
+        if user_reminders:
+            reminders_text = "\n".join([f"• {h:02d}:00" for h in user_reminders])
+            message = f"📋 Ваши напоминания:\n\n{reminders_text}"
+        else:
+            message = "📋 У вас нет активных напоминаний"
+        
+        keyboard = create_reminders_keyboard(user_id)
+        await query.edit_message_text(message, reply_markup=keyboard)
+    
+    elif data == "reminders_add":
+        keyboard = create_add_reminder_keyboard()
+        await query.edit_message_text(
+            "⏰ Выберите время для напоминания:",
+            reply_markup=keyboard
+        )
+    
+    elif data == "reminders_delete":
+        keyboard = create_delete_reminder_keyboard(user_id)
+        await query.edit_message_text(
+            "🗑️ Выберите напоминание для удаления:",
+            reply_markup=keyboard
+        )
+
+
+async def handle_add_reminder(query, user_id: int, data: str):
+    """Обработка добавления напоминания"""
+    hour = int(data.split(":", 1)[1])
+    success = add_reminder(user_id, hour)
+    
+    if success:
+        message = f"✅ Напоминание на {hour:02d}:00 добавлено!"
+    else:
+        message = f"❌ Напоминание на {hour:02d}:00 уже существует"
+    
+    keyboard = create_reminders_keyboard(user_id)
+    await query.edit_message_text(message, reply_markup=keyboard)
+
+
+async def handle_delete_reminder(query, user_id: int, data: str):
+    """Обработка удаления напоминания"""
+    hour = int(data.split(":", 1)[1])
+    success = remove_reminder(user_id, hour)
+    
+    if success:
+        message = f"✅ Напоминание на {hour:02d}:00 удалено!"
+    else:
+        message = f"❌ Напоминание на {hour:02d}:00 не найдено"
+    
+    keyboard = create_reminders_keyboard(user_id)
+    await query.edit_message_text(message, reply_markup=keyboard)

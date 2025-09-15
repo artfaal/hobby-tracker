@@ -11,11 +11,15 @@ SPREADSHEET_ID = os.getenv("SPREADSHEET_ID", "")
 SHEET_NAME = os.getenv("SHEET_NAME", "Данные")
 
 # Timezone Configuration
-TZ_NAME = os.getenv("TZ", "Europe/Moscow")
+TZ_NAME = os.getenv("TIMEZONE", os.getenv("TZ", "Europe/Moscow"))
+
+# Reminder Configuration
+REMINDER_THRESHOLD = int(os.getenv("REMINDER_THRESHOLD", "6"))
 
 # File paths
 HOBBIES_HISTORY_FILE = "data/hobbies_history.txt"
 ALIASES_FILE = "data/aliases.txt"
+REMINDERS_FILE = "data/reminders.txt"
 SERVICE_ACCOUNT_FILE = "service_account.json"
 
 # Google Sheets Scopes

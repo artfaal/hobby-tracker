@@ -13,11 +13,12 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Mess
 from telegram import Update
 
 from src.bot.handlers import (
-    start, help_cmd, quick_cmd, stats_cmd, list_all_cmd,
+    start, help_cmd, quick_cmd, stats_cmd, list_all_cmd, reminders_cmd,
     button_callback, free_text
 )
 from src.data.files import create_sample_aliases
 from src.utils.config import BOT_TOKEN
+from src.utils.scheduler import start_scheduler, stop_scheduler
 
 
 def main():
@@ -37,16 +38,28 @@ def main():
     app.add_handler(CommandHandler("quick", quick_cmd))
     app.add_handler(CommandHandler("stats", stats_cmd))
     app.add_handler(CommandHandler("list", list_all_cmd))
+    app.add_handler(CommandHandler("reminders", reminders_cmd))
     
     # Регистрируем обработчики кнопок и текста
     app.add_handler(CallbackQueryHandler(button_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, free_text))
     
     print("✅ Все обработчики зарегистрированы")
+    
+    # Запускаем планировщик напоминаний
+    start_scheduler(BOT_TOKEN)
+    
     print("🎯 Бот запущен и готов к работе!")
     
-    # Запускаем бота
-    app.run_polling(allowed_updates=Update.ALL_TYPES)
+    try:
+        # Запускаем бота
+        app.run_polling(allowed_updates=Update.ALL_TYPES)
+    except KeyboardInterrupt:
+        print("\n🛑 Получен сигнал остановки...")
+    finally:
+        # Останавливаем планировщик при завершении
+        stop_scheduler()
+        print("👋 Бот остановлен")
 
 
 if __name__ == "__main__":

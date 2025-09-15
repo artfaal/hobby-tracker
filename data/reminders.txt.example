@@ -1,0 +1,4 @@
+# Example reminders file
+# Format: user_id:hour
+# 123456789:16
+# 123456789:23

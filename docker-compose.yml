@@ -10,6 +10,8 @@ services:
       - SPREADSHEET_ID=${SPREADSHEET_ID}
       - SHEET_NAME=${SHEET_NAME:-Данные}
       - TIMEZONE=${TIMEZONE:-Europe/Moscow}
+      - TZ=${TIMEZONE:-Europe/Moscow}
+      - REMINDER_THRESHOLD=${REMINDER_THRESHOLD:-6}
     volumes:
       - ./data:/app/data
       - ./service_account.json:/app/service_account.json:ro

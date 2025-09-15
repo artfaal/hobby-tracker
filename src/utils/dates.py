@@ -15,6 +15,11 @@ def today_str() -> str:
     return now.date().isoformat()
 
 
+def get_tz():
+    """Возвращает объект timezone"""
+    return TZ
+
+
 def date_for_time(target_hour: int = 6) -> str:
     """
     Возвращает дату с учетом времени суток.

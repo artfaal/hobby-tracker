@@ -2,6 +2,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 from typing import List
 
 from ..data.files import get_recent_hobbies, get_all_hobbies, get_hobby_display_name
+from ..data.reminders import get_user_reminders
 from ..utils.dates import get_date_list
 
 
@@ -38,7 +39,10 @@ def create_hobby_keyboard(show_today_button: bool = False) -> InlineKeyboardMark
     date_row.append(InlineKeyboardButton("⚡ Другой день", callback_data="quick_dates"))
     buttons.append(date_row)
     
-    buttons.append([InlineKeyboardButton("📊 Статистика", callback_data="stats")])
+    buttons.append([
+        InlineKeyboardButton("📊 Статистика", callback_data="stats"),
+        InlineKeyboardButton("⏰ Напоминания", callback_data="reminders")
+    ])
     
     return InlineKeyboardMarkup(buttons)
 
@@ -126,4 +130,53 @@ def create_quick_date_keyboard() -> InlineKeyboardMarkup:
     
     buttons.append([InlineKeyboardButton("📅 Другая дата", callback_data="select_date")])
     buttons.append([InlineKeyboardButton("← Назад", callback_data="back_to_hobbies")])
+    return InlineKeyboardMarkup(buttons)
+
+
+def create_reminders_keyboard(user_id: int) -> InlineKeyboardMarkup:
+    """Создает клавиатуру управления напоминаниями"""
+    buttons = []
+    user_reminders = get_user_reminders(user_id)
+    
+    if user_reminders:
+        buttons.append([InlineKeyboardButton("📋 Мои напоминания", callback_data="reminders_list")])
+    
+    buttons.append([InlineKeyboardButton("➕ Добавить напоминание", callback_data="reminders_add")])
+    
+    if user_reminders:
+        buttons.append([InlineKeyboardButton("🗑️ Удалить напоминание", callback_data="reminders_delete")])
+    
+    buttons.append([InlineKeyboardButton("← Назад", callback_data="back_to_hobbies")])
+    return InlineKeyboardMarkup(buttons)
+
+
+def create_add_reminder_keyboard() -> InlineKeyboardMarkup:
+    """Создает клавиатуру для выбора времени напоминания"""
+    buttons = []
+    
+    # Кнопки часов по 6 в ряд
+    hours = list(range(24))
+    for i in range(0, 24, 6):
+        row = []
+        for hour in hours[i:i+6]:
+            row.append(InlineKeyboardButton(f"{hour:02d}:00", callback_data=f"add_reminder:{hour}"))
+        buttons.append(row)
+    
+    buttons.append([InlineKeyboardButton("← Назад", callback_data="reminders")])
+    return InlineKeyboardMarkup(buttons)
+
+
+def create_delete_reminder_keyboard(user_id: int) -> InlineKeyboardMarkup:
+    """Создает клавиатуру для удаления напоминаний"""
+    buttons = []
+    user_reminders = sorted(get_user_reminders(user_id))
+    
+    # Кнопки для каждого напоминания
+    for hour in user_reminders:
+        buttons.append([InlineKeyboardButton(f"🗑️ {hour:02d}:00", callback_data=f"delete_reminder:{hour}")])
+    
+    if not user_reminders:
+        buttons.append([InlineKeyboardButton("❌ Нет напоминаний", callback_data="reminders")])
+    
+    buttons.append([InlineKeyboardButton("← Назад", callback_data="reminders")])
     return InlineKeyboardMarkup(buttons)
