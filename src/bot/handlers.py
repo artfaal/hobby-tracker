@@ -1,0 +1,344 @@
+import asyncio
+from telegram import Update
+from telegram.ext import ContextTypes
+
+from .keyboards import (
+    create_hobby_keyboard, create_score_keyboard, create_date_keyboard,
+    create_all_hobbies_keyboard, create_stats_keyboard, create_quick_date_keyboard
+)
+from .messages import (
+    HELP_TEXT, STAR_EXPLANATION, format_hobby_stars_result, 
+    format_stats_message, get_date_display_name
+)
+from ..data.files import (
+    save_hobby_to_history, get_all_hobbies, get_hobby_display_name
+)
+from ..data.sheets import SheetsManager
+from ..utils.dates import date_for_time
+from ..utils.config import SPREADSHEET_ID
+
+# Состояние пользователей (в реальном приложении лучше использовать Redis/DB)
+user_states = {}
+
+# Глобальный экземпляр SheetsManager
+sheets = SheetsManager()
+
+
+
+
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик команды /start"""
+    await update.message.reply_text(HELP_TEXT)
+
+
+async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик команды /help"""
+    await update.message.reply_text(HELP_TEXT)
+
+
+async def quick_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик команды /quick - быстрый ввод через кнопки"""
+    user_id = update.message.from_user.id
+    # Сбрасываем состояние пользователя к сегодняшнему дню
+    user_states.pop(user_id, None)
+    
+    target_date = date_for_time()
+    keyboard = create_hobby_keyboard()
+    date_display = get_date_display_name(target_date)
+    await update.message.reply_text(
+        f"🚀 Заполнение на {date_display}\n\nВыберите увлечение:", 
+        reply_markup=keyboard
+    )
+
+
+async def stats_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик команды /stats - статистика"""
+    keyboard = create_stats_keyboard()
+    await update.message.reply_text(
+        "📊 Выберите день для статистики:",
+        reply_markup=keyboard
+    )
+
+
+async def list_all_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик команды /list - все увлечения"""
+    all_hobbies = get_all_hobbies()
+    if not all_hobbies:
+        await update.message.reply_text(
+            "📋 Пока нет увлечений в истории.\n\n"
+            "Используйте /quick чтобы добавить первое увлечение!"
+        )
+    else:
+        hobbies_text = "\n".join([f"• {get_hobby_display_name(h)}" for h in all_hobbies])
+        message = f"📋 Все ваши увлечения ({len(all_hobbies)}):\n\n{hobbies_text}"
+        
+        # Разбиваем на части, если сообщение слишком длинное
+        if len(message) > 4000:
+            hobbies_text = "\n".join([f"• {get_hobby_display_name(h)}" for h in all_hobbies[:30]])
+            message = f"📋 Ваши увлечения ({len(all_hobbies)}):\n\n{hobbies_text}"
+            if len(all_hobbies) > 30:
+                message += f"\n\n... и ещё {len(all_hobbies) - 30} увлечений"
+        
+        await update.message.reply_text(message)
+
+
+
+
+async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик нажатий на инлайн-кнопки"""
+    query = update.callback_query
+    await query.answer()
+    
+    data = query.data
+    user_id = query.from_user.id
+    
+    if data.startswith("hobby:"):
+        await handle_hobby_selection(query, user_id, data)
+    elif data.startswith("stars:"):
+        await handle_stars_selection(query, user_id, data)
+    elif data.startswith("date:"):
+        await handle_date_selection(query, user_id, data)
+    elif data.startswith("quick_date:"):
+        await handle_quick_date_selection(query, user_id, data)
+    elif data.startswith("stats"):
+        await handle_stats_selection(query, user_id, data)
+    elif data == "list_all":
+        await handle_list_all(query)
+    elif data == "add_new":
+        await handle_add_new(query, user_id)
+    elif data == "select_date":
+        await handle_select_date(query)
+    elif data == "quick_dates":
+        await handle_quick_dates(query)
+    elif data == "back_to_hobbies":
+        await handle_back_to_hobbies(query)
+    elif data == "today":
+        await handle_today_selection(query, user_id)
+
+
+async def handle_hobby_selection(query, user_id: int, data: str):
+    """Обработка выбора увлечения"""
+    hobby_key = data.split(":", 1)[1]
+    hobby_display = get_hobby_display_name(hobby_key)
+    
+    # Получаем выбранную дату из состояния пользователя
+    target_date = date_for_time()
+    if user_id in user_states and user_states[user_id].startswith("selected_date:"):
+        target_date = user_states[user_id].split(":", 1)[1]
+    
+    keyboard = create_score_keyboard(hobby_key, target_date)
+    
+    date_display = get_date_display_name(target_date)
+    await query.edit_message_text(
+        f"⭐ Оцените '{hobby_display}' на {date_display}:\n\n{STAR_EXPLANATION}",
+        reply_markup=keyboard
+    )
+
+
+async def handle_stars_selection(query, user_id: int, data: str):
+    """Обработка выбора количества звезд"""
+    parts = data.split(":")
+    if len(parts) >= 4:
+        hobby_key = parts[1]
+        stars = int(parts[2])
+        target_date = parts[3]
+        
+        # Сохраняем увлечение в историю
+        save_hobby_to_history(hobby_key)
+        
+        # Записываем в Google Sheets
+        score_values = {hobby_key: stars}
+        
+        # Показываем результат
+        hobby_display = get_hobby_display_name(hobby_key)
+        result_text = format_hobby_stars_result(hobby_display, stars)
+        
+        await query.edit_message_text(result_text)
+        
+        # Возвращаемся к списку увлечений
+        current_date = date_for_time()
+        show_today = target_date != current_date
+        keyboard = create_hobby_keyboard(show_today_button=show_today)
+        date_display = get_date_display_name(target_date)
+        await asyncio.sleep(0.5)
+        await query.edit_message_text(
+            f"🚀 Заполнение на {date_display}\n\nВыберите следующее увлечение:",
+            reply_markup=keyboard
+        )
+        
+        # Записываем в Google Sheets в фоне
+        try:
+            sheets.write_values(score_values, target_date)
+        except Exception:
+            pass  # Игнорируем ошибки для скорости
+
+
+async def handle_date_selection(query, user_id: int, data: str):
+    """Обработка выбора даты"""
+    selected_date = data.split(":", 1)[1]
+    user_states[user_id] = f"selected_date:{selected_date}"
+    
+    # Показываем кнопку "Сегодня" если выбрана не сегодняшняя дата
+    current_date = date_for_time()
+    show_today = selected_date != current_date
+    keyboard = create_hobby_keyboard(show_today_button=show_today)
+    date_display = get_date_display_name(selected_date)
+    await query.edit_message_text(
+        f"🚀 Заполнение на {date_display}\n\nВыберите увлечение:",
+        reply_markup=keyboard
+    )
+
+
+async def handle_quick_date_selection(query, user_id: int, data: str):
+    """Обработка быстрого выбора даты"""
+    selected_date = data.split(":", 1)[1]
+    user_states[user_id] = f"selected_date:{selected_date}"
+    
+    # Показываем кнопку "Сегодня" если выбрана не сегодняшняя дата
+    current_date = date_for_time()
+    show_today = selected_date != current_date
+    keyboard = create_hobby_keyboard(show_today_button=show_today)
+    date_display = get_date_display_name(selected_date)
+    await query.edit_message_text(
+        f"🚀 Заполнение на {date_display}\n\nВыберите увлечение:",
+        reply_markup=keyboard
+    )
+
+
+async def handle_stats_selection(query, user_id: int, data: str):
+    """Обработка выбора статистики"""
+    if data == "stats":
+        keyboard = create_stats_keyboard()
+        await query.edit_message_text(
+            "📊 Выберите день для статистики:",
+            reply_markup=keyboard
+        )
+    elif data == "stats_date":
+        keyboard = create_date_keyboard()
+        await query.edit_message_text(
+            "📅 Выберите дату для статистики:",
+            reply_markup=keyboard
+        )
+        user_states[user_id] = "stats_mode"
+    elif data.startswith("stats:"):
+        target_date = data.split(":", 1)[1]
+        await show_stats_for_date(query, target_date)
+
+
+async def show_stats_for_date(query, target_date: str):
+    """Показывает статистику за указанную дату"""
+    try:
+        data = sheets.get_day_data(target_date)
+        total = sheets.get_total_for_date(target_date)
+        
+        message = format_stats_message(target_date, data, total)
+        
+        keyboard = create_stats_keyboard()
+        await query.edit_message_text(message, reply_markup=keyboard)
+    except Exception as e:
+        await query.edit_message_text(
+            f"❌ Ошибка получения статистики: {str(e)}\n\n"
+            "Попробуйте еще раз или обратитесь к администратору."
+        )
+
+
+async def handle_list_all(query):
+    """Обработка показа всех увлечений"""
+    all_hobbies = get_all_hobbies()
+    if not all_hobbies:
+        await query.edit_message_text("📋 Пока нет увлечений в истории.")
+    else:
+        keyboard = create_all_hobbies_keyboard()
+        await query.edit_message_text(
+            f"📋 Все ваши увлечения ({len(all_hobbies)}):",
+            reply_markup=keyboard
+        )
+
+
+async def handle_add_new(query, user_id: int):
+    """Обработка добавления нового увлечения"""
+    target_date = date_for_time()
+    if user_id in user_states and user_states[user_id].startswith("selected_date:"):
+        target_date = user_states[user_id].split(":", 1)[1]
+    
+    user_states[user_id] = f"waiting_new_hobby:{target_date}"
+    await query.edit_message_text("✏️ Напишите название нового увлечения:")
+
+
+async def handle_select_date(query):
+    """Обработка выбора даты"""
+    keyboard = create_date_keyboard()
+    await query.edit_message_text(
+        "📅 Выберите дату для записи:",
+        reply_markup=keyboard
+    )
+
+
+async def handle_quick_dates(query):
+    """Обработка быстрого выбора дат"""
+    keyboard = create_quick_date_keyboard()
+    await query.edit_message_text(
+        "⚡ Быстрое заполнение для другого дня:",
+        reply_markup=keyboard
+    )
+
+
+async def handle_today_selection(query, user_id: int):
+    """Обработка возврата к сегодняшнему дню"""
+    # Сбрасываем состояние пользователя к сегодняшнему дню
+    user_states.pop(user_id, None)
+    
+    target_date = date_for_time()
+    keyboard = create_hobby_keyboard()  # Без кнопки "Сегодня" для сегодняшнего дня
+    date_display = get_date_display_name(target_date)
+    await query.edit_message_text(
+        f"🚀 Заполнение на {date_display}\n\nВыберите увлечение:",
+        reply_markup=keyboard
+    )
+
+
+async def handle_back_to_hobbies(query):
+    """Обработка возврата к списку увлечений"""
+    user_id = query.from_user.id
+    
+    # Получаем выбранную дату из состояния пользователя
+    target_date = date_for_time()
+    if user_id in user_states and user_states[user_id].startswith("selected_date:"):
+        target_date = user_states[user_id].split(":", 1)[1]
+    
+    # Показываем кнопку "Сегодня" если выбрана не сегодняшняя дата
+    current_date = date_for_time()
+    show_today = target_date != current_date
+    keyboard = create_hobby_keyboard(show_today_button=show_today)
+    date_display = get_date_display_name(target_date)
+    await query.edit_message_text(
+        f"🚀 Заполнение на {date_display}\n\nВыберите увлечение:",
+        reply_markup=keyboard
+    )
+
+
+async def free_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Обработчик свободного текста"""
+    user_id = update.message.from_user.id
+    
+    # Проверяем состояние пользователя
+    if user_id in user_states and user_states[user_id].startswith("waiting_new_hobby:"):
+        hobby_name = update.message.text.strip().lower()
+        target_date = user_states[user_id].split(":", 1)[1]
+        user_states.pop(user_id, None)
+        
+        # Создаем клавиатуру для выбора оценки
+        keyboard = create_score_keyboard(hobby_name, target_date)
+        
+        date_display = get_date_display_name(target_date)
+        await update.message.reply_text(
+            f"⭐ Оцените '{hobby_name.capitalize()}' на {date_display}:\n\n{STAR_EXPLANATION}",
+            reply_markup=keyboard
+        )
+        return
+    
+    # Если это не команда создания нового увлечения, игнорируем свободный текст
+    await update.message.reply_text(
+        "Используйте /quick для быстрого заполнения увлечений через кнопки!"
+    )

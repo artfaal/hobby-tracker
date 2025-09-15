@@ -1,0 +1,21 @@
+version: '3.8'
+
+services:
+  hobby-tracker:
+    build: .
+    container_name: hobby-tracker-bot
+    restart: unless-stopped
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - SPREADSHEET_ID=${SPREADSHEET_ID}
+      - SHEET_NAME=${SHEET_NAME:-Данные}
+      - TIMEZONE=${TIMEZONE:-Europe/Moscow}
+    volumes:
+      - ./data:/app/data
+      - ./service_account.json:/app/service_account.json:ro
+    networks:
+      - hobby-network
+
+networks:
+  hobby-network:
+    driver: bridge
