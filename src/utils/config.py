@@ -14,8 +14,8 @@ SHEET_NAME = os.getenv("SHEET_NAME", "Данные")
 TZ_NAME = os.getenv("TZ", "Europe/Moscow")
 
 # File paths
-HOBBIES_HISTORY_FILE = "hobbies_history.txt"
-ALIASES_FILE = "aliases.txt"
+HOBBIES_HISTORY_FILE = "data/hobbies_history.txt"
+ALIASES_FILE = "data/aliases.txt"
 SERVICE_ACCOUNT_FILE = "service_account.json"
 
 # Google Sheets Scopes

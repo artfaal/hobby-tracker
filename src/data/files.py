@@ -30,6 +30,8 @@ def load_aliases() -> dict[str, str]:
 def save_aliases(aliases: dict[str, str]) -> None:
     """Сохраняет алиасы в файл"""
     try:
+        # Создаем папку data если её нет
+        os.makedirs(os.path.dirname(ALIASES_FILE), exist_ok=True)
         with open(ALIASES_FILE, 'w', encoding='utf-8') as f:
             for hobby_name, display_name in aliases.items():
                 f.write(f"{hobby_name}={display_name}\n")
@@ -86,6 +88,8 @@ def save_hobby_to_history(hobby_name: str) -> None:
     
     # Сохраняем в файл (максимум 20 записей)
     try:
+        # Создаем папку data если её нет
+        os.makedirs(os.path.dirname(HOBBIES_HISTORY_FILE), exist_ok=True)
         with open(HOBBIES_HISTORY_FILE, 'w', encoding='utf-8') as f:
             for hobby in recent[:20]:
                 f.write(f"{hobby}\n")
