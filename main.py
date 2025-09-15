@@ -5,6 +5,7 @@ Hobby Tracker Bot - Трекер увлечений для Telegram
 
 import sys
 import os
+import logging
 
 # Добавляем src в путь для импортов
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
@@ -23,11 +24,28 @@ from src.utils.scheduler import start_scheduler, stop_scheduler
 
 def main():
     """Главная функция запуска бота"""
-    print("🚀 Запуск Hobby Tracker Bot...")
+    # Настройка логирования
+    logging.basicConfig(
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        level=logging.INFO,
+        handlers=[
+            logging.StreamHandler()  # Выводим в stdout для Docker logs
+        ]
+    )
     
-    # Создаем пример файла алиасов при первом запуске
-    create_sample_aliases()
-    print("✅ Конфигурация готова")
+    # Отключаем лишние логи от httpx
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    
+    logger = logging.getLogger(__name__)
+    logger.info("🚀 Запуск Hobby Tracker Bot...")
+    
+    try:
+        # Создаем пример файла алиасов при первом запуске
+        create_sample_aliases()
+        logger.info("✅ Конфигурация готова")
+    except Exception as e:
+        logger.error(f"❌ Ошибка конфигурации: {e}")
+        sys.exit(1)
     
     # Создаем приложение
     app = Application.builder().token(BOT_TOKEN).build()
@@ -44,22 +62,32 @@ def main():
     app.add_handler(CallbackQueryHandler(button_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, text_message_handler))
     
-    print("✅ Все обработчики зарегистрированы")
+    logger.info("✅ Все обработчики зарегистрированы")
     
-    # Запускаем планировщик напоминаний
-    start_scheduler(BOT_TOKEN)
+    try:
+        # Запускаем планировщик напоминаний
+        start_scheduler(BOT_TOKEN)
+        logger.info("✅ Планировщик напоминаний запущен")
+    except Exception as e:
+        logger.error(f"❌ Ошибка запуска планировщика: {e}")
     
-    print("🎯 Бот запущен и готов к работе!")
+    logger.info("🎯 Бот запущен и готов к работе!")
     
     try:
         # Запускаем бота
         app.run_polling(allowed_updates=Update.ALL_TYPES)
     except KeyboardInterrupt:
-        print("\n🛑 Получен сигнал остановки...")
+        logger.info("🛑 Получен сигнал остановки...")
+    except Exception as e:
+        logger.error(f"❌ Критическая ошибка бота: {e}")
     finally:
         # Останавливаем планировщик при завершении
-        stop_scheduler()
-        print("👋 Бот остановлен")
+        try:
+            stop_scheduler()
+            logger.info("✅ Планировщик остановлен")
+        except Exception as e:
+            logger.error(f"❌ Ошибка остановки планировщика: {e}")
+        logger.info("👋 Бот остановлен")
 
 
 if __name__ == "__main__":

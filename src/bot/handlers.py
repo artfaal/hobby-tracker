@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -28,12 +29,18 @@ user_states = {}
 # Глобальный экземпляр SheetsManager
 sheets = SheetsManager()
 
+# Логгер для этого модуля
+logger = logging.getLogger(__name__)
+
 
 
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /start"""
+    user_id = update.message.from_user.id
+    username = update.message.from_user.username or "unknown"
+    logger.info(f"Start command from {username} ({user_id})")
     await update.message.reply_text(HELP_TEXT)
 
 
@@ -45,6 +52,8 @@ async def help_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def quick_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик команды /quick - быстрый ввод через кнопки"""
     user_id = update.message.from_user.id
+    username = update.message.from_user.username or "unknown"
+    logger.info(f"Quick command from {username} ({user_id})")
     # Сбрасываем состояние пользователя к сегодняшнему дню
     user_states.pop(user_id, None)
     
@@ -288,11 +297,13 @@ async def handle_list_all(query):
 
 async def handle_add_new(query, user_id: int):
     """Обработка добавления нового увлечения"""
+    username = query.from_user.username or "unknown"
     target_date = date_for_time()
     if user_id in user_states and user_states[user_id].startswith("selected_date:"):
         target_date = user_states[user_id].split(":", 1)[1]
     
     user_states[user_id] = f"waiting_new_hobby:{target_date}"
+    logger.info(f"Add new hobby requested by {username} ({user_id}) for date {target_date}")
     await query.edit_message_text("✏️ Напишите название нового увлечения:")
 
 
@@ -347,31 +358,6 @@ async def handle_back_to_hobbies(query):
         reply_markup=keyboard
     )
 
-
-async def free_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик свободного текста"""
-    user_id = update.message.from_user.id
-    
-    # Проверяем состояние пользователя
-    if user_id in user_states and user_states[user_id].startswith("waiting_new_hobby:"):
-        hobby_name = update.message.text.strip().lower()
-        target_date = user_states[user_id].split(":", 1)[1]
-        user_states.pop(user_id, None)
-        
-        # Создаем клавиатуру для выбора оценки
-        keyboard = create_score_keyboard(hobby_name, target_date)
-        
-        date_display = get_date_display_name(target_date)
-        await update.message.reply_text(
-            f"⭐ Оцените '{hobby_name.capitalize()}' на {date_display}:\n\n{STAR_EXPLANATION}",
-            reply_markup=keyboard
-        )
-        return
-    
-    # Если это не команда создания нового увлечения, игнорируем свободный текст
-    await update.message.reply_text(
-        "Используйте /quick для быстрого заполнения увлечений через кнопки!"
-    )
 
 
 async def reminders_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -515,12 +501,33 @@ async def handle_aliases(query, user_id: int, data: str):
 
 
 async def text_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Обработчик текстовых сообщений (для алиасов)"""
+    """Обработчик текстовых сообщений (для алиасов и новых увлечений)"""
     user_id = update.message.from_user.id
+    username = update.message.from_user.username or "unknown"
     text = update.message.text.strip()
     
-    if user_id in user_states and user_states[user_id] == "awaiting_alias":
-        # Обрабатываем добавление алиаса
+    logger.info(f"Text message from {username} ({user_id}): '{text}', state: {user_states.get(user_id, 'none')}")
+    
+    # Обрабатываем добавление нового увлечения
+    if user_id in user_states and user_states[user_id].startswith("waiting_new_hobby:"):
+        hobby_name = text.lower()
+        target_date = user_states[user_id].split(":", 1)[1]
+        user_states.pop(user_id, None)
+        
+        logger.info(f"Adding new hobby '{hobby_name}' for user {username} ({user_id}) on {target_date}")
+        
+        # Создаем клавиатуру для выбора оценки
+        keyboard = create_score_keyboard(hobby_name, target_date)
+        
+        date_display = get_date_display_name(target_date)
+        await update.message.reply_text(
+            f"⭐ Оцените '{hobby_name.capitalize()}' на {date_display}:\n\n{STAR_EXPLANATION}",
+            reply_markup=keyboard
+        )
+        return
+    
+    # Обрабатываем добавление алиаса
+    elif user_id in user_states and user_states[user_id] == "awaiting_alias":
         if "=" in text:
             parts = text.split("=", 1)
             hobby_key = parts[0].strip()
@@ -552,3 +559,9 @@ async def text_message_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         
         # Сбрасываем состояние
         user_states.pop(user_id, None)
+    
+    # Если это не команда создания нового увлечения или алиаса, направляем к /quick
+    else:
+        await update.message.reply_text(
+            "Используйте /quick для быстрого заполнения увлечений через кнопки!"
+        )
