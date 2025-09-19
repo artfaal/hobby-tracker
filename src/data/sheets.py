@@ -86,7 +86,7 @@ class SheetsManager:
             self.ws.batch_update(updates)
         return headers, row_idx
 
-    def get_day_data(self, target_date: str) -> Dict[str, int]:
+    def get_day_data(self, target_date: str) -> Dict[str, float]:
         """Получает данные за указанный день"""
         try:
             dates = self.ws.col_values(1)
@@ -100,18 +100,18 @@ class SheetsManager:
                     for j, header in enumerate(headers[1:], start=1):  # Пропускаем колонку даты
                         if j < len(row_values) and row_values[j]:
                             try:
-                                data[header] = int(float(row_values[j].replace(',', '.')))
+                                data[header] = float(row_values[j].replace(',', '.'))
                             except ValueError:
-                                data[header] = 0
+                                data[header] = 0.0
                         else:
-                            data[header] = 0
+                            data[header] = 0.0
                     
                     return data
             return {}
         except Exception:
             return {}
 
-    def get_total_for_date(self, target_date: str) -> int:
+    def get_total_for_date(self, target_date: str) -> float:
         """Получает общую сумму баллов за дату"""
         data = self.get_day_data(target_date)
         return sum(data.values())

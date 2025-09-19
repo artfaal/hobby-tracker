@@ -180,7 +180,7 @@ async def handle_stars_selection(query, user_id: int, data: str):
     parts = data.split(":")
     if len(parts) >= 4:
         hobby_key = parts[1]
-        stars = int(parts[2])
+        stars = float(parts[2])  # Теперь поддерживаем десятичные значения
         target_date = parts[3]
         
         # Сохраняем увлечение в историю

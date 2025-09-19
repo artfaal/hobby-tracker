@@ -9,34 +9,60 @@ HELP_TEXT = (
     "/stats — статистика по дням 📊\n"
     "/list — показать все увлечения 📋\n"
     "/reminders — настройка напоминаний ⏰\n\n"
-    "⭐ Система звезд (1-5):\n"
-    "⭐ = минимальный приоритет\n"
-    "⭐⭐⭐ = средний приоритет\n"
-    "⭐⭐⭐⭐⭐ = максимальный приоритет\n"
+    "⭐ Система звезд (0.5-8):\n"
+    "🌟 = половина звезды (0.5)\n"
+    "⭐ = минимальный приоритет (1)\n"
+    "⭐⭐⭐ = средний приоритет (3)\n"
+    "⭐⭐⭐⭐⭐ = высокий приоритет (5)\n"
+    "⭐⭐⭐⭐⭐⭐⭐⭐ = максимальный приоритет (8)\n"
     "❌ = не было активности\n\n"
     "Все действия выполняются через интерактивные кнопки!\n"
     "Используйте /quick для начала работы."
 )
 
 STAR_EXPLANATION = (
-    "⭐ = минимальный приоритет\n"
-    "⭐⭐⭐ = средний приоритет\n"
-    "⭐⭐⭐⭐⭐ = максимальный приоритет"
+    "🌟 = половина звезды (0.5)\n"
+    "⭐ = минимальный приоритет (1)\n"
+    "⭐⭐⭐ = средний приоритет (3)\n"
+    "⭐⭐⭐⭐⭐ = высокий приоритет (5)\n"
+    "⭐⭐⭐⭐⭐⭐⭐⭐ = максимальный приоритет (8)"
 )
 
 
-def format_hobby_stars_result(hobby_display: str, stars: int) -> str:
+def format_stars_display(stars: float) -> str:
+    """Создает визуальное представление звезд"""
+    if stars == 0:
+        return "❌"
+    elif stars == 0.5:
+        return "🌟"
+    else:
+        return "⭐" * int(stars)
+
+
+def format_hobby_stars_result(hobby_display: str, stars: float) -> str:
     """Форматирует результат выбора звезд"""
-    stars_display = "⭐" * stars if stars > 0 else "❌"
-    result_text = f"✅ {stars_display} {hobby_display} = {stars} балл"
+    stars_display = format_stars_display(stars)
     
-    if stars != 1:
-        result_text += "ов" if stars in [0, 5, 6, 7, 8, 9, 10] else "а"
+    # Форматируем число для отображения
+    if stars == int(stars):
+        stars_text = str(int(stars))
+    else:
+        stars_text = str(stars)
+    
+    result_text = f"✅ {stars_display} {hobby_display} = {stars_text} балл"
+    
+    # Склонение
+    if stars == 1:
+        pass  # "балл"
+    elif stars in [0, 5, 6, 7, 8, 9, 10] or (stars % 1 == 0.5):
+        result_text += "ов"
+    else:
+        result_text += "а"
     
     return result_text
 
 
-def format_stats_message(date_str: str, data: dict, total: int) -> str:
+def format_stats_message(date_str: str, data: dict, total: float) -> str:
     """Форматирует сообщение со статистикой за день"""
     if not data or total == 0:
         return f"📊 Статистика за {date_str}\n\n❌ Нет данных за этот день"
@@ -50,10 +76,21 @@ def format_stats_message(date_str: str, data: dict, total: int) -> str:
         if score > 0:
             from ..data.files import get_hobby_display_name
             display_name = get_hobby_display_name(hobby)
-            stars = "⭐" * score
-            lines.append(f"{display_name}: {stars} ({score})")
+            stars_display = format_stars_display(score)
+            # Форматируем число для отображения
+            if score == int(score):
+                score_text = str(int(score))
+            else:
+                score_text = str(score)
+            lines.append(f"{display_name}: {stars_display} ({score_text})")
     
-    lines.append(f"\n🎯 Общий балл: {total}")
+    # Форматируем общий балл
+    if total == int(total):
+        total_text = str(int(total))
+    else:
+        total_text = str(total)
+    
+    lines.append(f"\n🎯 Общий балл: {total_text}")
     
     return "\n".join(lines)
 

@@ -48,18 +48,31 @@ def create_hobby_keyboard(show_today_button: bool = False) -> InlineKeyboardMark
 
 
 def create_score_keyboard(hobby_name: str, target_date: str = None) -> InlineKeyboardMarkup:
-    """Создает клавиатуру для выбора количества звезд"""
+    """Создает клавиатуру для выбора количества звезд (0.5-8)"""
     buttons = []
     
-    # Кнопки с звездочками от 1 до 5
-    star_buttons = []
-    for i in range(1, 6):
-        stars = "⭐" * i
-        star_buttons.append(InlineKeyboardButton(f"{stars} {i}", callback_data=f"stars:{hobby_name}:{i}:{target_date}"))
+    # Определяем все возможные значения звезд
+    star_values = [0.5, 1, 2, 3, 4, 5, 6, 7, 8]
     
-    # Разбиваем на 2 ряда: 1-3 звезды и 4-5 звезд
+    # Создаем кнопки для каждого значения
+    star_buttons = []
+    for value in star_values:
+        if value == 0.5:
+            display = "🌟 0.5"  # Половинка звезды
+            stars_display = "🌟"
+        else:
+            stars_display = "⭐" * int(value)
+            display = f"{stars_display} {int(value)}"
+        
+        star_buttons.append(InlineKeyboardButton(display, callback_data=f"stars:{hobby_name}:{value}:{target_date}"))
+    
+    # Разбиваем на ряды по 3 кнопки
+    # Ряд 1: 0.5, 1, 2
     buttons.append(star_buttons[:3])
-    buttons.append(star_buttons[3:])
+    # Ряд 2: 3, 4, 5
+    buttons.append(star_buttons[3:6])
+    # Ряд 3: 6, 7, 8
+    buttons.append(star_buttons[6:])
     
     # Кнопка "Не было" (0 звезд)
     buttons.append([InlineKeyboardButton("❌ Не было (0)", callback_data=f"stars:{hobby_name}:0:{target_date}")])

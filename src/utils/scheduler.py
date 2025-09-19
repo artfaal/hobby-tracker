@@ -65,15 +65,27 @@ class ReminderScheduler:
                 for hobby, score in today_data.items():
                     if score > 0:
                         from ..data.files import get_hobby_display_name
+                        from ..bot.messages import format_stars_display
                         display_name = get_hobby_display_name(hobby)
-                        stars = "⭐" * score
-                        activities.append(f"{display_name}: {stars} ({score})")
+                        stars_display = format_stars_display(score)
+                        # Форматируем число для отображения
+                        if score == int(score):
+                            score_text = str(int(score))
+                        else:
+                            score_text = str(score)
+                        activities.append(f"{display_name}: {stars_display} ({score_text})")
                 
                 activities_text = "\n".join(activities)
+                # Форматируем общий балл
+                if today_total == int(today_total):
+                    total_text = str(int(today_total))
+                else:
+                    total_text = str(today_total)
+                
                 message = (
                     f"📝 Время записать активности!\n\n"
                     f"📊 Статистика на сегодня:\n{activities_text}\n"
-                    f"🎯 Общий балл: {today_total}\n\n"
+                    f"🎯 Общий балл: {total_text}\n\n"
                     f"Нажмите /quick для записи!"
                 )
             else:
