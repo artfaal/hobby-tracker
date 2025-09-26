@@ -600,6 +600,15 @@ async def text_message_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             # Сбрасываем состояние
             user_states.pop(user_id, None)
             
+            # Возвращаемся к главному меню
+            current_date = date_for_time()
+            keyboard = create_hobby_keyboard()
+            date_display = get_date_display_name(current_date)
+            await update.message.reply_text(
+                f"🚀 Заполнение на {date_display}\n\nВыберите увлечение:", 
+                reply_markup=keyboard
+            )
+            
             # Асинхронно записываем в Google Sheets
             try:
                 await asyncio.create_task(

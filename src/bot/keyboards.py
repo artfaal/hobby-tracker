@@ -80,8 +80,7 @@ def create_score_keyboard(hobby_name: str, target_date: str = None) -> InlineKey
     
     # Кнопки управления
     buttons.append([
-        InlineKeyboardButton("← Назад", callback_data="back_to_hobbies"),
-        InlineKeyboardButton("📅 Дата", callback_data="select_date")
+        InlineKeyboardButton("← Назад", callback_data="back_to_hobbies")
     ])
     
     return InlineKeyboardMarkup(buttons)
