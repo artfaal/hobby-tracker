@@ -267,7 +267,7 @@ async def handle_stats_selection(query, user_id: int, data: str):
         await show_stats_for_date(query, target_date)
 
 
-async def show_stats_for_date(query, target_date: str):
+async def show_stats_for_date(query, target_date: str, show_stats_keyboard: bool = True):
     """Показывает статистику за указанную дату"""
     try:
         data = sheets.get_day_data(target_date)
@@ -275,7 +275,13 @@ async def show_stats_for_date(query, target_date: str):
         
         message = format_stats_message(target_date, data, total)
         
-        keyboard = create_stats_keyboard()
+        # Для кнопок быстрого доступа показываем только кнопку назад
+        if show_stats_keyboard:
+            keyboard = create_stats_keyboard()
+        else:
+            from .keyboards import InlineKeyboardMarkup, InlineKeyboardButton
+            keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("← Назад", callback_data="back_to_hobbies")]])
+        
         await query.edit_message_text(message, reply_markup=keyboard)
     except Exception as e:
         await query.edit_message_text(
@@ -287,14 +293,14 @@ async def show_stats_for_date(query, target_date: str):
 async def handle_stats_today(query):
     """Обработка статистики за сегодня"""
     today = date_for_time()
-    await show_stats_for_date(query, today)
+    await show_stats_for_date(query, today, show_stats_keyboard=False)
 
 
 async def handle_stats_yesterday(query):
     """Обработка статистики за вчера"""
     from datetime import datetime, timedelta
     yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
-    await show_stats_for_date(query, yesterday)
+    await show_stats_for_date(query, yesterday, show_stats_keyboard=False)
 
 
 async def handle_list_all(query):
@@ -597,7 +603,7 @@ async def text_message_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             # Асинхронно записываем в Google Sheets
             try:
                 await asyncio.create_task(
-                    asyncio.to_thread(sheets.write_data, target_date, score_values)
+                    asyncio.to_thread(sheets.write_values, score_values, target_date)
                 )
                 logger.info(f"Successfully wrote custom stars data to sheets: {score_values}")
             except Exception as e:
