@@ -3,6 +3,7 @@ from typing import List
 
 from ..data.files import get_recent_hobbies, get_all_hobbies, get_hobby_display_name, get_all_aliases, add_alias
 from ..data.reminders import get_user_reminders
+from ..data.stars import load_star_values
 from ..utils.dates import get_date_list
 
 
@@ -36,11 +37,11 @@ def create_hobby_keyboard(show_today_button: bool = False) -> InlineKeyboardMark
     if show_today_button:
         date_row.append(InlineKeyboardButton("🏠 Сегодня", callback_data="today"))
     date_row.append(InlineKeyboardButton("📅 Выбрать дату", callback_data="select_date"))
-    date_row.append(InlineKeyboardButton("⚡ Другой день", callback_data="quick_dates"))
     buttons.append(date_row)
     
     buttons.append([
-        InlineKeyboardButton("📊 Статистика", callback_data="stats"),
+        InlineKeyboardButton("📊 Сегодня", callback_data="stats_today"),
+        InlineKeyboardButton("📊 Вчера", callback_data="stats_yesterday"),
         InlineKeyboardButton("⚙️ Настройки", callback_data="settings")
     ])
     
@@ -48,31 +49,28 @@ def create_hobby_keyboard(show_today_button: bool = False) -> InlineKeyboardMark
 
 
 def create_score_keyboard(hobby_name: str, target_date: str = None) -> InlineKeyboardMarkup:
-    """Создает клавиатуру для выбора количества звезд (0.5-8)"""
+    """Создает клавиатуру для выбора количества звезд (динамически из stars.txt)"""
     buttons = []
     
-    # Определяем все возможные значения звезд
-    star_values = [0.5, 1, 2, 3, 4, 5, 6, 7, 8]
+    # Загружаем значения звезд из файла
+    star_values = load_star_values()
     
     # Создаем кнопки для каждого значения
     star_buttons = []
     for value in star_values:
         if value == 0.5:
-            display = "🌟 0.5"  # Половинка звезды
-            stars_display = "🌟"
+            display = "0.5 🌟"  # Половинка звезды
+        elif value == int(value):
+            display = f"{int(value)} ⭐"  # Цифра + звезда для целых
         else:
-            stars_display = "⭐" * int(value)
-            display = f"{stars_display} {int(value)}"
+            display = f"{value} ⭐"  # Десятичное число + звезда
         
         star_buttons.append(InlineKeyboardButton(display, callback_data=f"stars:{hobby_name}:{value}:{target_date}"))
     
     # Разбиваем на ряды по 3 кнопки
-    # Ряд 1: 0.5, 1, 2
-    buttons.append(star_buttons[:3])
-    # Ряд 2: 3, 4, 5
-    buttons.append(star_buttons[3:6])
-    # Ряд 3: 6, 7, 8
-    buttons.append(star_buttons[6:])
+    for i in range(0, len(star_buttons), 3):
+        row = star_buttons[i:i+3]
+        buttons.append(row)
     
     # Кнопка "Не было" (0 звезд)
     buttons.append([InlineKeyboardButton("❌ Не было (0)", callback_data=f"stars:{hobby_name}:0:{target_date}")])
@@ -129,21 +127,6 @@ def create_stats_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(buttons)
 
 
-def create_quick_date_keyboard() -> InlineKeyboardMarkup:
-    """Создает быстрые кнопки для заполнения других дней"""
-    buttons = []
-    dates = get_date_list(3)  # Последние 3 дня
-    
-    for date_str, display in dates:
-        if "Сегодня" in display:
-            continue  # Пропускаем сегодня
-        # Убираем эмодзи и делаем короче
-        short_display = display.replace("📅 ", "").replace(" (", " ").replace(")", "")
-        buttons.append([InlineKeyboardButton(f"⚡ {short_display}", callback_data=f"quick_date:{date_str}")])
-    
-    buttons.append([InlineKeyboardButton("📅 Другая дата", callback_data="select_date")])
-    buttons.append([InlineKeyboardButton("← Назад", callback_data="back_to_hobbies")])
-    return InlineKeyboardMarkup(buttons)
 
 
 def create_reminders_keyboard(user_id: int) -> InlineKeyboardMarkup:
@@ -200,6 +183,7 @@ def create_settings_keyboard() -> InlineKeyboardMarkup:
     buttons = [
         [InlineKeyboardButton("⏰ Напоминания", callback_data="reminders")],
         [InlineKeyboardButton("📝 Алиасы", callback_data="aliases")],
+        [InlineKeyboardButton("📊 Статистика", callback_data="stats")],
         [InlineKeyboardButton("← Назад", callback_data="back_to_hobbies")]
     ]
     return InlineKeyboardMarkup(buttons)

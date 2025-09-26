@@ -20,6 +20,7 @@ TZ_NAME = os.getenv("TIMEZONE", os.getenv("TZ", "Europe/Moscow"))
 HOBBIES_HISTORY_FILE = "data/hobbies_history.txt"
 ALIASES_FILE = "data/aliases.txt"
 REMINDERS_FILE = "data/reminders.txt"
+STARS_FILE = "data/stars.txt"
 SERVICE_ACCOUNT_FILE = "service_account.json"
 
 # Google Sheets Scopes

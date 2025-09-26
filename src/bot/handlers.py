@@ -5,7 +5,7 @@ from telegram.ext import ContextTypes
 
 from .keyboards import (
     create_hobby_keyboard, create_score_keyboard, create_date_keyboard,
-    create_all_hobbies_keyboard, create_stats_keyboard, create_quick_date_keyboard,
+    create_all_hobbies_keyboard, create_stats_keyboard,
     create_reminders_keyboard, create_add_reminder_keyboard, create_delete_reminder_keyboard,
     create_settings_keyboard, create_aliases_keyboard, create_aliases_list_keyboard
 )
@@ -128,18 +128,18 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_stars_selection(query, user_id, data)
     elif data.startswith("date:"):
         await handle_date_selection(query, user_id, data)
-    elif data.startswith("quick_date:"):
-        await handle_quick_date_selection(query, user_id, data)
     elif data.startswith("stats"):
         await handle_stats_selection(query, user_id, data)
+    elif data == "stats_today":
+        await handle_stats_today(query)
+    elif data == "stats_yesterday":
+        await handle_stats_yesterday(query)
     elif data == "list_all":
         await handle_list_all(query)
     elif data == "add_new":
         await handle_add_new(query, user_id)
     elif data == "select_date":
         await handle_select_date(query)
-    elif data == "quick_dates":
-        await handle_quick_dates(query)
     elif data == "back_to_hobbies":
         await handle_back_to_hobbies(query)
     elif data == "today":
@@ -282,6 +282,19 @@ async def show_stats_for_date(query, target_date: str):
         )
 
 
+async def handle_stats_today(query):
+    """Обработка статистики за сегодня"""
+    today = date_for_time()
+    await show_stats_for_date(query, today)
+
+
+async def handle_stats_yesterday(query):
+    """Обработка статистики за вчера"""
+    from datetime import datetime, timedelta
+    yesterday = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+    await show_stats_for_date(query, yesterday)
+
+
 async def handle_list_all(query):
     """Обработка показа всех увлечений"""
     all_hobbies = get_all_hobbies()
@@ -316,13 +329,6 @@ async def handle_select_date(query):
     )
 
 
-async def handle_quick_dates(query):
-    """Обработка быстрого выбора дат"""
-    keyboard = create_quick_date_keyboard()
-    await query.edit_message_text(
-        "⚡ Быстрое заполнение для другого дня:",
-        reply_markup=keyboard
-    )
 
 
 async def handle_today_selection(query, user_id: int):

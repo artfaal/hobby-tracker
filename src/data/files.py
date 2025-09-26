@@ -120,6 +120,10 @@ def create_sample_aliases() -> None:
     # Создаем папку data если её нет
     os.makedirs(os.path.dirname(ALIASES_FILE), exist_ok=True)
     
+    # Создаем файл звезд
+    from .stars import create_default_stars_file
+    create_default_stars_file()
+    
     # Создаем aliases.txt если его нет
     if not os.path.exists(ALIASES_FILE):
         example_file = ALIASES_FILE + ".example"
