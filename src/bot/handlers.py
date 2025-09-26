@@ -128,12 +128,12 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_stars_selection(query, user_id, data)
     elif data.startswith("date:"):
         await handle_date_selection(query, user_id, data)
-    elif data.startswith("stats"):
-        await handle_stats_selection(query, user_id, data)
     elif data == "stats_today":
         await handle_stats_today(query)
     elif data == "stats_yesterday":
         await handle_stats_yesterday(query)
+    elif data.startswith("stats"):
+        await handle_stats_selection(query, user_id, data)
     elif data == "list_all":
         await handle_list_all(query)
     elif data == "add_new":
