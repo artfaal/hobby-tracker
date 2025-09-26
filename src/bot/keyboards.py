@@ -72,8 +72,11 @@ def create_score_keyboard(hobby_name: str, target_date: str = None) -> InlineKey
         row = star_buttons[i:i+3]
         buttons.append(row)
     
-    # Кнопка "Не было" (0 звезд)
-    buttons.append([InlineKeyboardButton("❌ Не было (0)", callback_data=f"stars:{hobby_name}:0:{target_date}")])
+    # Кнопка "Не было" (0 звезд) и Custom
+    buttons.append([
+        InlineKeyboardButton("❌ Не было (0)", callback_data=f"stars:{hobby_name}:0:{target_date}"),
+        InlineKeyboardButton("✏️ Custom", callback_data=f"custom_stars:{hobby_name}:{target_date}")
+    ])
     
     # Кнопки управления
     buttons.append([

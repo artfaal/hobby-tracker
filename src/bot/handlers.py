@@ -154,6 +154,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_settings(query)
     elif data.startswith("aliases"):
         await handle_aliases(query, user_id, data)
+    elif data.startswith("custom_stars:"):
+        await handle_custom_stars_request(query, user_id, data)
 
 
 async def handle_hobby_selection(query, user_id: int, data: str):
@@ -506,6 +508,29 @@ async def handle_aliases(query, user_id: int, data: str):
         pass
 
 
+async def handle_custom_stars_request(query, user_id: int, data: str):
+    """Обработка запроса на ввод custom значения звезд"""
+    parts = data.split(":")
+    if len(parts) >= 3:
+        hobby_name = parts[1]
+        target_date = parts[2] if parts[2] != "None" else date_for_time()
+        
+        # Устанавливаем состояние пользователя для ожидания custom значения
+        user_states[user_id] = f"awaiting_custom_stars:{hobby_name}:{target_date}"
+        
+        hobby_display = get_hobby_display_name(hobby_name)
+        date_display = get_date_display_name(target_date)
+        
+        await query.edit_message_text(
+            f"✏️ Введите количество часов для '{hobby_display}' на {date_display}:\n\n"
+            f"Можно использовать десятичные значения:\n"
+            f"• 0.5 или 0,5 (30 минут)\n"
+            f"• 1.5 или 1,5 (1 час 30 минут)\n"
+            f"• 12 или 12,0 (12 часов)\n\n"
+            f"Просто напишите число и отправьте сообщение."
+        )
+
+
 async def text_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Обработчик текстовых сообщений (для алиасов и новых увлечений)"""
     user_id = update.message.from_user.id
@@ -531,6 +556,64 @@ async def text_message_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             reply_markup=keyboard
         )
         return
+    
+    # Обрабатываем ввод custom количества звезд
+    elif user_id in user_states and user_states[user_id].startswith("awaiting_custom_stars:"):
+        parts = user_states[user_id].split(":", 2)
+        hobby_name = parts[1]
+        target_date = parts[2]
+        
+        # Парсим введенное значение, поддерживая и точку, и запятую
+        try:
+            # Заменяем запятую на точку для стандартизации
+            normalized_text = text.replace(",", ".")
+            stars_value = float(normalized_text)
+            
+            # Проверяем разумные границы
+            if stars_value < 0:
+                await update.message.reply_text("❌ Количество часов не может быть отрицательным!")
+                return
+            elif stars_value > 24:
+                await update.message.reply_text("❌ Количество часов не может быть больше 24!")
+                return
+            
+            logger.info(f"Custom stars value '{stars_value}' for hobby '{hobby_name}' by user {username} ({user_id}) on {target_date}")
+            
+            # Сохраняем увлечение в историю
+            save_hobby_to_history(hobby_name)
+            
+            # Записываем в Google Sheets
+            score_values = {hobby_name: stars_value}
+            
+            # Показываем результат
+            hobby_display = get_hobby_display_name(hobby_name)
+            result_text = format_hobby_stars_result(hobby_display, stars_value)
+            
+            await update.message.reply_text(result_text)
+            
+            # Сбрасываем состояние
+            user_states.pop(user_id, None)
+            
+            # Асинхронно записываем в Google Sheets
+            try:
+                await asyncio.create_task(
+                    asyncio.to_thread(sheets.write_data, target_date, score_values)
+                )
+                logger.info(f"Successfully wrote custom stars data to sheets: {score_values}")
+            except Exception as e:
+                logger.error(f"Failed to write custom stars data to sheets: {e}")
+            
+            return
+            
+        except ValueError:
+            await update.message.reply_text(
+                "❌ Неправильный формат числа!\n\n"
+                "Используйте числа, например:\n"
+                "• 1 или 1.0\n"
+                "• 2.5 или 2,5\n"
+                "• 12"
+            )
+            return
     
     # Обрабатываем добавление алиаса
     elif user_id in user_states and user_states[user_id] == "awaiting_alias":
