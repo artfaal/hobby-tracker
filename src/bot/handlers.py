@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from datetime import datetime
 from telegram import Update
 from telegram.ext import ContextTypes
 
@@ -283,7 +284,7 @@ async def show_stats_for_date(query, target_date: str, show_stats_keyboard: bool
         # Затем отправляем новое сообщение с кнопками навигации (оно будет внизу)
         if show_stats_keyboard:
             keyboard = create_stats_keyboard()
-            await query.message.reply_text("📊 Выберите день для статистики:", reply_markup=keyboard)
+            await query.message.reply_text("📊 Статистика по дням:", reply_markup=keyboard)
         else:
             from .keyboards import InlineKeyboardMarkup, InlineKeyboardButton
             keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("← Назад", callback_data="back_to_hobbies")]])
@@ -653,7 +654,7 @@ async def show_weekly_analytics(query):
         
         # Отправляем новое меню внизу
         keyboard = create_stats_keyboard()
-        await query.message.reply_text("📊 Выберите день для статистики:", reply_markup=keyboard)
+        await query.message.reply_text("📈 Навигация по аналитике:", reply_markup=keyboard)
         
         # Удаляем исходное сообщение
         await query.message.delete()
@@ -730,7 +731,7 @@ async def show_top3_analytics(query):
         
         # Отправляем новое меню внизу
         keyboard = create_stats_keyboard()
-        await query.message.reply_text("📊 Выберите день для статистики:", reply_markup=keyboard)
+        await query.message.reply_text("🏆 Навигация по рейтингу:", reply_markup=keyboard)
         
         # Удаляем исходное сообщение
         await query.message.delete()
