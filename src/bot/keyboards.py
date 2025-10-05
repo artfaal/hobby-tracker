@@ -124,6 +124,12 @@ def create_stats_keyboard() -> InlineKeyboardMarkup:
     for date_str, display in dates[:3]:  # Только последние 3 дня
         buttons.append([InlineKeyboardButton(f"📊 {display.replace('📅', '')}", callback_data=f"stats:{date_str}")])
     
+    # Аналитика
+    buttons.append([
+        InlineKeyboardButton("📈 Неделя", callback_data="analytics_week"),
+        InlineKeyboardButton("🏆 Топ-3", callback_data="analytics_top3")
+    ])
+    
     buttons.append([InlineKeyboardButton("📋 Другая дата", callback_data="stats_date")])
     buttons.append([InlineKeyboardButton("← Назад", callback_data="back_to_hobbies")])
     return InlineKeyboardMarkup(buttons)

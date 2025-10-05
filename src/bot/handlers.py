@@ -156,6 +156,8 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_aliases(query, user_id, data)
     elif data.startswith("custom_stars:"):
         await handle_custom_stars_request(query, user_id, data)
+    elif data.startswith("analytics"):
+        await handle_analytics(query, user_id, data)
 
 
 async def handle_hobby_selection(query, user_id: int, data: str):
@@ -539,6 +541,194 @@ async def handle_custom_stars_request(query, user_id: int, data: str):
             f"• 12 или 12,0 (12 часов)\n\n"
             f"Просто напишите число и отправьте сообщение."
         )
+
+
+async def handle_analytics(query, user_id: int, data: str):
+    """Обработка запросов аналитики"""
+    if data == "analytics_week":
+        await show_weekly_analytics(query)
+    elif data == "analytics_top3":
+        await show_top3_analytics(query)
+
+
+def create_unicode_chart(values: list, max_height: int = 8) -> str:
+    """Создает Unicode график из значений"""
+    if not values or max(values) == 0:
+        return "▁" * len(values)
+    
+    chars = "▁▂▃▄▅▆▇█"
+    max_val = max(values)
+    
+    chart = ""
+    for val in values:
+        if val == 0:
+            chart += "▁"
+        else:
+            level = min(int((val / max_val) * (len(chars) - 1)), len(chars) - 1)
+            chart += chars[level]
+    
+    return chart
+
+
+def get_week_data() -> dict:
+    """Получает данные за последние 7 дней"""
+    from datetime import datetime, timedelta
+    
+    week_data = {}
+    today = datetime.now()
+    
+    for i in range(7):
+        date = today - timedelta(days=i)
+        date_str = date.strftime('%Y-%m-%d')
+        try:
+            day_data = sheets.get_day_data(date_str)
+            week_data[date_str] = day_data if day_data else {}
+        except:
+            week_data[date_str] = {}
+    
+    return week_data
+
+
+async def show_weekly_analytics(query):
+    """Показывает еженедельную аналитику"""
+    try:
+        week_data = get_week_data()
+        
+        # Собираем статистику по увлечениям
+        hobby_totals = {}
+        daily_totals = []
+        dates = []
+        
+        # Сортируем даты по порядку (от старых к новым)
+        sorted_dates = sorted(week_data.keys())
+        
+        for date_str in sorted_dates:
+            day_data = week_data[date_str]
+            day_total = sum(day_data.values()) if day_data else 0
+            daily_totals.append(day_total)
+            dates.append(date_str)
+            
+            for hobby, hours in day_data.items():
+                if hobby not in hobby_totals:
+                    hobby_totals[hobby] = 0
+                hobby_totals[hobby] += hours
+        
+        # Создаем график недельной активности
+        chart = create_unicode_chart(daily_totals)
+        
+        # Форматируем даты для отображения
+        formatted_dates = []
+        for date_str in sorted_dates:
+            date_obj = datetime.strptime(date_str, '%Y-%m-%d')
+            day_name = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'][date_obj.weekday()]
+            formatted_dates.append(f"{day_name} {date_obj.strftime('%d.%m')}")
+        
+        # Общее время за неделю
+        total_week_hours = sum(daily_totals)
+        avg_daily = total_week_hours / 7 if total_week_hours > 0 else 0
+        
+        # Формируем сообщение
+        message = f"📈 **Еженедельная аналитика**\n\n"
+        message += f"📊 График активности:\n"
+        message += f"`{chart}`\n"
+        message += f"`{''.join([d[:2] for d in formatted_dates])}`\n\n"
+        
+        message += f"📋 **Сводка за неделю:**\n"
+        message += f"🎯 Общее время: {total_week_hours:.1f} ч.\n"
+        message += f"📊 Среднее в день: {avg_daily:.1f} ч.\n\n"
+        
+        # Топ-3 активности за неделю
+        if hobby_totals:
+            sorted_hobbies = sorted(hobby_totals.items(), key=lambda x: x[1], reverse=True)[:3]
+            message += f"🏆 **Топ-3 за неделю:**\n"
+            for i, (hobby, hours) in enumerate(sorted_hobbies, 1):
+                hobby_display = get_hobby_display_name(hobby)
+                message += f"{i}. {hobby_display}: {hours:.1f} ч.\n"
+        
+        # Обновляем меню
+        keyboard = create_stats_keyboard()
+        await query.edit_message_text("📊 Выберите день для статистики:", reply_markup=keyboard)
+        
+        # Отправляем аналитику
+        await query.message.reply_text(message, parse_mode='Markdown')
+        
+    except Exception as e:
+        logger.error(f"Error in weekly analytics: {e}")
+        await query.message.reply_text("❌ Ошибка при создании еженедельной аналитики")
+
+
+async def show_top3_analytics(query):
+    """Показывает топ-3 активности за разные периоды"""
+    try:
+        from datetime import datetime, timedelta
+        
+        # Данные за неделю
+        week_data = get_week_data()
+        week_totals = {}
+        for day_data in week_data.values():
+            for hobby, hours in day_data.items():
+                week_totals[hobby] = week_totals.get(hobby, 0) + hours
+        
+        # Данные за месяц (последние 30 дней)
+        month_totals = {}
+        today = datetime.now()
+        for i in range(30):
+            date = today - timedelta(days=i)
+            date_str = date.strftime('%Y-%m-%d')
+            try:
+                day_data = sheets.get_day_data(date_str)
+                if day_data:
+                    for hobby, hours in day_data.items():
+                        month_totals[hobby] = month_totals.get(hobby, 0) + hours
+            except:
+                continue
+        
+        message = "🏆 **Топ-3 активности**\n\n"
+        
+        # Топ-3 за неделю
+        if week_totals:
+            week_top3 = sorted(week_totals.items(), key=lambda x: x[1], reverse=True)[:3]
+            message += "📅 **За неделю:**\n"
+            for i, (hobby, hours) in enumerate(week_top3, 1):
+                hobby_display = get_hobby_display_name(hobby)
+                
+                # Простой тренд (сравниваем первую и вторую половину недели)
+                first_half = sum([week_data[d].get(hobby, 0) for d in sorted(week_data.keys())[:4]])
+                second_half = sum([week_data[d].get(hobby, 0) for d in sorted(week_data.keys())[4:]])
+                
+                trend = ""
+                if second_half > first_half * 1.1:
+                    trend = "📈"
+                elif second_half < first_half * 0.9:
+                    trend = "📉"
+                else:
+                    trend = "➡️"
+                
+                message += f"{i}. {hobby_display}: {hours:.1f} ч. {trend}\n"
+            message += "\n"
+        
+        # Топ-3 за месяц
+        if month_totals:
+            month_top3 = sorted(month_totals.items(), key=lambda x: x[1], reverse=True)[:3]
+            message += "🗓️ **За месяц:**\n"
+            for i, (hobby, hours) in enumerate(month_top3, 1):
+                hobby_display = get_hobby_display_name(hobby)
+                avg_daily = hours / 30
+                message += f"{i}. {hobby_display}: {hours:.1f} ч. ({avg_daily:.1f} ч/день)\n"
+        
+        if not week_totals and not month_totals:
+            message += "📊 Пока недостаточно данных для анализа"
+        
+        # Обновляем меню
+        keyboard = create_stats_keyboard()
+        await query.edit_message_text("📊 Выберите день для статистики:", reply_markup=keyboard)
+        
+        # Отправляем аналитику
+        await query.message.reply_text(message, parse_mode='Markdown')
+        
+    except Exception as e:
+        logger.error(f"Error in top3 analytics: {e}")
+        await query.message.reply_text("❌ Ошибка при создании топ-3 аналитики")
 
 
 async def text_message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
