@@ -126,7 +126,7 @@ def create_stats_keyboard() -> InlineKeyboardMarkup:
     
     # Аналитика
     buttons.append([
-        InlineKeyboardButton("📈 Неделя", callback_data="analytics_week"),
+        InlineKeyboardButton("📈 7 дней", callback_data="analytics_week"),
         InlineKeyboardButton("🏆 Топ-3", callback_data="analytics_top3")
     ])
     

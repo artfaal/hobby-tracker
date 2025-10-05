@@ -627,24 +627,24 @@ async def show_weekly_analytics(query):
             day_name = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'][date_obj.weekday()]
             formatted_dates.append(f"{day_name} {date_obj.strftime('%d.%m')}")
         
-        # Общее время за неделю
+        # Общее время за 7 дней
         total_week_hours = sum(daily_totals)
         avg_daily = total_week_hours / 7 if total_week_hours > 0 else 0
         
         # Формируем сообщение
-        message = f"📈 **Еженедельная аналитика**\n\n"
+        message = f"📈 **Последние 7 дней**\n\n"
         message += f"📊 График активности:\n"
         message += f"`{chart}`\n"
         message += f"`{''.join([d[:2] for d in formatted_dates])}`\n\n"
         
-        message += f"📋 **Сводка за неделю:**\n"
+        message += f"📋 **Сводка за 7 дней:**\n"
         message += f"🎯 Общее время: {total_week_hours:.1f} ч.\n"
         message += f"📊 Среднее в день: {avg_daily:.1f} ч.\n\n"
         
-        # Топ-3 активности за неделю
+        # Топ-3 активности за 7 дней
         if hobby_totals:
             sorted_hobbies = sorted(hobby_totals.items(), key=lambda x: x[1], reverse=True)[:3]
-            message += f"🏆 **Топ-3 за неделю:**\n"
+            message += f"🏆 **Топ-3 за 7 дней:**\n"
             for i, (hobby, hours) in enumerate(sorted_hobbies, 1):
                 hobby_display = get_hobby_display_name(hobby)
                 message += f"{i}. {hobby_display}: {hours:.1f} ч.\n"
@@ -692,14 +692,14 @@ async def show_top3_analytics(query):
         
         message = "🏆 **Топ-3 активности**\n\n"
         
-        # Топ-3 за неделю
+        # Топ-3 за последние 7 дней
         if week_totals:
             week_top3 = sorted(week_totals.items(), key=lambda x: x[1], reverse=True)[:3]
-            message += "📅 **За неделю:**\n"
+            message += "📅 **Последние 7 дней:**\n"
             for i, (hobby, hours) in enumerate(week_top3, 1):
                 hobby_display = get_hobby_display_name(hobby)
                 
-                # Простой тренд (сравниваем первую и вторую половину недели)
+                # Простой тренд (сравниваем первую и вторую половину периода)
                 first_half = sum([week_data[d].get(hobby, 0) for d in sorted(week_data.keys())[:4]])
                 second_half = sum([week_data[d].get(hobby, 0) for d in sorted(week_data.keys())[4:]])
                 
@@ -714,10 +714,10 @@ async def show_top3_analytics(query):
                 message += f"{i}. {hobby_display}: {hours:.1f} ч. {trend}\n"
             message += "\n"
         
-        # Топ-3 за месяц
+        # Топ-3 за последние 30 дней
         if month_totals:
             month_top3 = sorted(month_totals.items(), key=lambda x: x[1], reverse=True)[:3]
-            message += "🗓️ **За месяц:**\n"
+            message += "🗓️ **Последние 30 дней:**\n"
             for i, (hobby, hours) in enumerate(month_top3, 1):
                 hobby_display = get_hobby_display_name(hobby)
                 avg_daily = hours / 30
