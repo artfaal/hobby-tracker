@@ -1,5 +1,11 @@
 import os
+import shutil
+import logging
+from datetime import datetime
 from ..utils.config import HOBBIES_HISTORY_FILE, ALIASES_FILE
+
+# Логгер для этого модуля
+logger = logging.getLogger(__name__)
 
 
 def norm_hobby(name: str) -> str:
@@ -93,8 +99,39 @@ def get_all_hobbies() -> list[str]:
     return get_recent_hobbies(limit=1000)
 
 
+def create_backup(file_path: str) -> None:
+    """Создает резервную копию файла с timestamp"""
+    if os.path.exists(file_path):
+        try:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_path = f"{file_path}.backup_{timestamp}"
+            shutil.copy2(file_path, backup_path)
+            logger.info(f"Created backup: {backup_path}")
+            
+            # Удаляем старые бэкапы (оставляем только последние 5)
+            backup_dir = os.path.dirname(file_path)
+            base_name = os.path.basename(file_path)
+            backup_files = [f for f in os.listdir(backup_dir) if f.startswith(f"{base_name}.backup_")]
+            backup_files.sort(reverse=True)
+            
+            for old_backup in backup_files[5:]:  # Удаляем всё кроме 5 последних
+                try:
+                    os.remove(os.path.join(backup_dir, old_backup))
+                    logger.info(f"Removed old backup: {old_backup}")
+                except Exception as e:
+                    logger.error(f"Failed to remove old backup {old_backup}: {e}")
+                    
+        except Exception as e:
+            logger.error(f"Failed to create backup for {file_path}: {e}")
+
+
 def save_hobby_to_history(hobby_name: str) -> None:
     """Сохраняет увлечение в начало файла истории"""
+    logger.info(f"Saving hobby to history: '{hobby_name}'")
+    
+    # Создаем бэкап перед изменением
+    create_backup(HOBBIES_HISTORY_FILE)
+    
     recent = get_recent_hobbies()
     
     # Убираем hobby_name из списка, если он там есть
@@ -111,8 +148,20 @@ def save_hobby_to_history(hobby_name: str) -> None:
         with open(HOBBIES_HISTORY_FILE, 'w', encoding='utf-8') as f:
             for hobby in recent[:20]:
                 f.write(f"{hobby}\n")
-    except Exception:
-        pass
+        logger.info(f"Successfully saved {len(recent[:20])} hobbies to history file")
+    except Exception as e:
+        logger.error(f"Failed to save hobby '{hobby_name}' to history: {e}")
+        # Пытаемся восстановить из бэкапа
+        try:
+            backup_files = [f for f in os.listdir(os.path.dirname(HOBBIES_HISTORY_FILE)) 
+                           if f.startswith(f"{os.path.basename(HOBBIES_HISTORY_FILE)}.backup_")]
+            if backup_files:
+                latest_backup = sorted(backup_files)[-1]
+                backup_path = os.path.join(os.path.dirname(HOBBIES_HISTORY_FILE), latest_backup)
+                shutil.copy2(backup_path, HOBBIES_HISTORY_FILE)
+                logger.info(f"Restored from backup: {latest_backup}")
+        except Exception as restore_error:
+            logger.error(f"Failed to restore from backup: {restore_error}")
 
 
 def create_sample_aliases() -> None:
