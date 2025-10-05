@@ -275,17 +275,18 @@ async def show_stats_for_date(query, target_date: str, show_stats_keyboard: bool
         
         message = format_stats_message(target_date, data, total)
         
-        # Отправляем статистику отдельным сообщением
-        await query.message.reply_text(message)
-        
-        # Показываем кнопки навигации в исходном сообщении
+        # Сначала обновляем меню навигации (оно останется внизу)
         if show_stats_keyboard:
             keyboard = create_stats_keyboard()
             await query.edit_message_text("📊 Выберите день для статистики:", reply_markup=keyboard)
         else:
             from .keyboards import InlineKeyboardMarkup, InlineKeyboardButton
             keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("← Назад", callback_data="back_to_hobbies")]])
-            await query.edit_message_text("📊 Статистика отправлена выше", reply_markup=keyboard)
+            await query.edit_message_text("📊 Статистика:", reply_markup=keyboard)
+        
+        # Затем отправляем статистику отдельным сообщением (она появится ниже кнопок)
+        await query.message.reply_text(message)
+        
     except Exception as e:
         await query.edit_message_text(
             f"❌ Ошибка получения статистики: {str(e)}\n\n"
