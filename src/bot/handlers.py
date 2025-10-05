@@ -277,17 +277,20 @@ async def show_stats_for_date(query, target_date: str, show_stats_keyboard: bool
         
         message = format_stats_message(target_date, data, total)
         
-        # Сначала обновляем меню навигации (оно останется внизу)
+        # Сначала отправляем статистику
+        await query.message.reply_text(message)
+        
+        # Затем отправляем новое сообщение с кнопками навигации (оно будет внизу)
         if show_stats_keyboard:
             keyboard = create_stats_keyboard()
-            await query.edit_message_text("📊 Выберите день для статистики:", reply_markup=keyboard)
+            await query.message.reply_text("📊 Выберите день для статистики:", reply_markup=keyboard)
         else:
             from .keyboards import InlineKeyboardMarkup, InlineKeyboardButton
             keyboard = InlineKeyboardMarkup([[InlineKeyboardButton("← Назад", callback_data="back_to_hobbies")]])
-            await query.edit_message_text("📊 Статистика:", reply_markup=keyboard)
+            await query.message.reply_text("📊 Навигация:", reply_markup=keyboard)
         
-        # Затем отправляем статистику отдельным сообщением (она появится ниже кнопок)
-        await query.message.reply_text(message)
+        # Удаляем исходное сообщение с кнопкой
+        await query.message.delete()
         
     except Exception as e:
         await query.edit_message_text(
@@ -645,12 +648,15 @@ async def show_weekly_analytics(query):
                 hobby_display = get_hobby_display_name(hobby)
                 message += f"{i}. {hobby_display}: {hours:.1f} ч.\n"
         
-        # Обновляем меню
-        keyboard = create_stats_keyboard()
-        await query.edit_message_text("📊 Выберите день для статистики:", reply_markup=keyboard)
-        
         # Отправляем аналитику
         await query.message.reply_text(message, parse_mode='Markdown')
+        
+        # Отправляем новое меню внизу
+        keyboard = create_stats_keyboard()
+        await query.message.reply_text("📊 Выберите день для статистики:", reply_markup=keyboard)
+        
+        # Удаляем исходное сообщение
+        await query.message.delete()
         
     except Exception as e:
         logger.error(f"Error in weekly analytics: {e}")
@@ -719,12 +725,15 @@ async def show_top3_analytics(query):
         if not week_totals and not month_totals:
             message += "📊 Пока недостаточно данных для анализа"
         
-        # Обновляем меню
-        keyboard = create_stats_keyboard()
-        await query.edit_message_text("📊 Выберите день для статистики:", reply_markup=keyboard)
-        
         # Отправляем аналитику
         await query.message.reply_text(message, parse_mode='Markdown')
+        
+        # Отправляем новое меню внизу
+        keyboard = create_stats_keyboard()
+        await query.message.reply_text("📊 Выберите день для статистики:", reply_markup=keyboard)
+        
+        # Удаляем исходное сообщение
+        await query.message.delete()
         
     except Exception as e:
         logger.error(f"Error in top3 analytics: {e}")
