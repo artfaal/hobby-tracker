@@ -2,5 +2,14 @@
 .env.bak
 service_account.json
 
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
 # Data files (user-editable, keep as examples only)
 data/*.txt
+
+# Backup files
+data/*.backup_*
