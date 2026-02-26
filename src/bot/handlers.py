@@ -8,7 +8,8 @@ from .keyboards import (
     create_hobby_keyboard, create_score_keyboard, create_date_keyboard,
     create_all_hobbies_keyboard, create_stats_keyboard,
     create_reminders_keyboard, create_add_reminder_keyboard, create_delete_reminder_keyboard,
-    create_settings_keyboard, create_aliases_keyboard, create_aliases_list_keyboard
+    create_settings_keyboard, create_aliases_keyboard, create_aliases_list_keyboard,
+    HOBBIES_PAGE_SIZE
 )
 from .messages import (
     HELP_TEXT, STAR_EXPLANATION, format_hobby_stars_result, 
@@ -137,6 +138,9 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_stats_selection(query, user_id, data)
     elif data == "list_all":
         await handle_list_all(query)
+    elif data.startswith("hobby_page:"):
+        page = int(data.split(":", 1)[1])
+        await handle_list_all(query, page=page)
     elif data == "add_new":
         await handle_add_new(query, user_id)
     elif data == "select_date":
@@ -313,15 +317,18 @@ async def handle_stats_yesterday(query):
     await show_stats_for_date(query, yesterday, show_stats_keyboard=False)
 
 
-async def handle_list_all(query):
-    """Обработка показа всех увлечений"""
+async def handle_list_all(query, page: int = 0):
+    """Обработка показа всех увлечений с пагинацией"""
     all_hobbies = get_all_hobbies()
     if not all_hobbies:
         await query.edit_message_text("📋 Пока нет увлечений в истории.")
     else:
-        keyboard = create_all_hobbies_keyboard()
+        total_pages = max(1, (len(all_hobbies) + HOBBIES_PAGE_SIZE - 1) // HOBBIES_PAGE_SIZE)
+        page = max(0, min(page, total_pages - 1))
+        keyboard = create_all_hobbies_keyboard(page=page)
+        page_info = f" • стр. {page + 1}/{total_pages}" if total_pages > 1 else ""
         await query.edit_message_text(
-            f"📋 Все ваши увлечения ({len(all_hobbies)}):",
+            f"📋 Все ваши увлечения ({len(all_hobbies)}){page_info}:",
             reply_markup=keyboard
         )
 

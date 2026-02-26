@@ -98,20 +98,40 @@ def create_date_keyboard() -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(buttons)
 
 
-def create_all_hobbies_keyboard() -> InlineKeyboardMarkup:
-    """Создает клавиатуру со всеми увлечениями"""
+HOBBIES_PAGE_SIZE = 20
+
+
+def create_all_hobbies_keyboard(page: int = 0) -> InlineKeyboardMarkup:
+    """Создает клавиатуру со всеми увлечениями с пагинацией"""
     buttons = []
     all_hobbies = get_all_hobbies()
-    
-    for i in range(0, len(all_hobbies), 2):
+
+    total = len(all_hobbies)
+    total_pages = max(1, (total + HOBBIES_PAGE_SIZE - 1) // HOBBIES_PAGE_SIZE)
+    page = max(0, min(page, total_pages - 1))
+
+    start = page * HOBBIES_PAGE_SIZE
+    end = min(start + HOBBIES_PAGE_SIZE, total)
+    page_hobbies = all_hobbies[start:end]
+
+    for i in range(0, len(page_hobbies), 2):
         row = []
-        for j in range(i, min(i + 2, len(all_hobbies))):
-            hobby_key = all_hobbies[j]
+        for j in range(i, min(i + 2, len(page_hobbies))):
+            hobby_key = page_hobbies[j]
             hobby_display = get_hobby_display_name(hobby_key)
             row.append(InlineKeyboardButton(hobby_display, callback_data=f"hobby:{hobby_key}"))
         buttons.append(row)
-    
-    buttons.append([InlineKeyboardButton("← Назад", callback_data="back_to_hobbies")])
+
+    if total_pages > 1:
+        nav_row = []
+        if page > 0:
+            nav_row.append(InlineKeyboardButton("◀️ Назад", callback_data=f"hobby_page:{page - 1}"))
+        if page < total_pages - 1:
+            nav_row.append(InlineKeyboardButton("Вперёд ▶️", callback_data=f"hobby_page:{page + 1}"))
+        if nav_row:
+            buttons.append(nav_row)
+
+    buttons.append([InlineKeyboardButton("← К увлечениям", callback_data="back_to_hobbies")])
     return InlineKeyboardMarkup(buttons)
 
 

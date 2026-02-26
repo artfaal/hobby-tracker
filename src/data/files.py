@@ -141,14 +141,13 @@ def save_hobby_to_history(hobby_name: str) -> None:
     # Добавляем в начало
     recent.insert(0, hobby_name)
     
-    # Сохраняем в файл (максимум 20 записей)
     try:
         # Создаем папку data если её нет
         os.makedirs(os.path.dirname(HOBBIES_HISTORY_FILE), exist_ok=True)
         with open(HOBBIES_HISTORY_FILE, 'w', encoding='utf-8') as f:
-            for hobby in recent[:20]:
+            for hobby in recent:
                 f.write(f"{hobby}\n")
-        logger.info(f"Successfully saved {len(recent[:20])} hobbies to history file")
+        logger.info(f"Successfully saved {len(recent)} hobbies to history file")
     except Exception as e:
         logger.error(f"Failed to save hobby '{hobby_name}' to history: {e}")
         # Пытаемся восстановить из бэкапа

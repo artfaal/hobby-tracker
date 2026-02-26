@@ -17,6 +17,14 @@ services:
     networks:
       - hobby-network
 
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "3"
+        compress: "true"
+
+
 networks:
   hobby-network:
     driver: bridge
