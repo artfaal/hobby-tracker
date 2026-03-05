@@ -132,7 +132,7 @@ def save_hobby_to_history(hobby_name: str) -> None:
     # Создаем бэкап перед изменением
     create_backup(HOBBIES_HISTORY_FILE)
     
-    recent = get_recent_hobbies()
+    recent = get_recent_hobbies(limit=1000)
     
     # Убираем hobby_name из списка, если он там есть
     if hobby_name in recent:
