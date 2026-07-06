@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<!--
+  PROTOTYPE — THROWAWAY. Не продакшен-код.
+  Вопрос: какая механика ввода часов по ~30 активностям быстрее для вечернего ритуала
+  в будущем Telegram Mini App.
+  Три варианта, переключение стрелками внизу или ?variant=A|B|C:
+    A — сетка плиток со степперами [− часы +] на каждой
+    B — тап по плитке раскрывает ряд пресетов [0.5][1][2]...[✏️]
+    C — гибрид: пустая плитка тап→пресеты, заполненная — значение + мини-степперы
+  Данные фейковые, состояние в памяти, общее между вариантами.
+  Запуск: open prototype/input-ux.html
+-->
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>PROTOTYPE — механика ввода</title>
+<style>
+  :root {
+    --bg: #17212b;
+    --card: #232e3c;
+    --card-filled: #2b5278;
+    --text: #f5f5f5;
+    --muted: #708499;
+    --accent: #5eb5f7;
+    --chip: #3a4a5c;
+    --danger: #e26a6a;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; background: #0e1621; color: var(--text);
+    font-family: -apple-system, "SF Pro Text", Roboto, "Segoe UI", sans-serif;
+    display: flex; justify-content: center;
+  }
+  .phone {
+    width: 100%; max-width: 420px; min-height: 100vh;
+    background: var(--bg); display: flex; flex-direction: column;
+  }
+  header {
+    padding: 14px 16px 10px; display: flex; align-items: center; justify-content: space-between;
+    position: sticky; top: 0; background: var(--bg); z-index: 5;
+    border-bottom: 1px solid #0e1621;
+  }
+  header h1 { font-size: 17px; margin: 0; font-weight: 600; }
+  header .date-switch { display: flex; gap: 6px; }
+  header .date-switch button {
+    background: var(--chip); border: none; color: var(--muted); border-radius: 14px;
+    padding: 5px 10px; font-size: 13px; cursor: pointer;
+  }
+  header .date-switch button.active { background: var(--accent); color: #08131d; font-weight: 600; }
+  main { flex: 1; padding: 10px 10px 130px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+
+  .tile {
+    background: var(--card); border-radius: 12px; padding: 10px;
+    display: flex; flex-direction: column; gap: 8px; cursor: pointer;
+    border: 1px solid transparent; transition: background .12s;
+    user-select: none;
+  }
+  .tile.filled { background: var(--card-filled); border-color: #3d6d99; }
+  .tile .name { font-size: 13.5px; line-height: 1.25; }
+  .tile .val { font-size: 13px; color: var(--accent); font-weight: 700; min-height: 16px; }
+  .tile .val.empty { color: var(--muted); font-weight: 400; }
+
+  /* Степперы (A и C) */
+  .stepper { display: flex; align-items: center; justify-content: space-between; gap: 4px; }
+  .stepper button {
+    flex: 0 0 34px; height: 30px; border-radius: 8px; border: none;
+    background: var(--chip); color: var(--text); font-size: 17px; cursor: pointer;
+  }
+  .stepper button:active { background: var(--accent); color: #08131d; }
+  .stepper .num { flex: 1; text-align: center; font-size: 14px; font-weight: 700; }
+  .stepper .num.zero { color: var(--muted); font-weight: 400; }
+
+  /* Панель пресетов (B и C) */
+  .presets {
+    grid-column: 1 / -1; background: #1c2733; border-radius: 12px; padding: 10px;
+    display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+  }
+  .presets .title { width: 100%; font-size: 13px; color: var(--muted); margin-bottom: 2px; }
+  .presets button {
+    border: none; border-radius: 9px; background: var(--chip); color: var(--text);
+    padding: 9px 0; font-size: 14.5px; font-weight: 600; cursor: pointer;
+    flex: 1 0 calc(20% - 6px); min-width: 52px;
+  }
+  .presets button:active { background: var(--accent); color: #08131d; }
+  .presets button.clear { background: #46323a; color: var(--danger); }
+
+  footer.bar {
+    position: fixed; bottom: 54px; left: 50%; transform: translateX(-50%);
+    width: 100%; max-width: 420px; background: #1c2733; padding: 10px 14px;
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    border-top: 1px solid #0e1621; z-index: 5;
+  }
+  footer.bar .total { font-size: 14px; }
+  footer.bar .total b { color: var(--accent); }
+  footer.bar .save {
+    background: var(--accent); color: #08131d; border: none; border-radius: 10px;
+    padding: 10px 18px; font-size: 14.5px; font-weight: 700; cursor: pointer;
+  }
+  footer.bar .reset { background: none; border: none; color: var(--muted); font-size: 13px; cursor: pointer; }
+
+  /* Переключатель прототипа — НЕ часть дизайна */
+  .proto-switcher {
+    position: fixed; bottom: 8px; left: 50%; transform: translateX(-50%);
+    background: #7c3aed; color: #fff; border-radius: 999px; padding: 6px 10px;
+    display: flex; align-items: center; gap: 10px; z-index: 10;
+    box-shadow: 0 4px 16px rgba(0,0,0,.5); font-size: 13px; font-weight: 600;
+  }
+  .proto-switcher button {
+    background: rgba(255,255,255,.15); border: none; color: #fff; border-radius: 999px;
+    width: 28px; height: 28px; font-size: 15px; cursor: pointer;
+  }
+  .toast {
+    position: fixed; top: 14px; left: 50%; transform: translateX(-50%);
+    background: #2ea043; color: #fff; padding: 8px 16px; border-radius: 10px;
+    font-size: 13.5px; z-index: 20; opacity: 0; transition: opacity .2s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="phone">
+  <header>
+    <h1 id="title">Сегодня, 6 июля</h1>
+    <div class="date-switch">
+      <button class="active" onclick="fakeDate(this,'Сегодня, 6 июля')">Сегодня</button>
+      <button onclick="fakeDate(this,'Вчера, 5 июля')">Вчера</button>
+      <button onclick="fakeDate(this,'📅 4 июля')">📅</button>
+    </div>
+  </header>
+  <main><div class="grid" id="grid"></div></main>
+  <footer class="bar">
+    <div class="total" id="total"></div>
+    <button class="reset" onclick="resetAll()">Сбросить</button>
+    <button class="save" onclick="toast('Сохранено (фейк, никуда не пишет)')">Сохранить</button>
+  </footer>
+  <div class="proto-switcher">
+    <button onclick="cycle(-1)">←</button>
+    <span id="vlabel"></span>
+    <button onclick="cycle(1)">→</button>
+  </div>
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+// ===== фейковые данные: реальные 32 категории в порядке недавнего использования =====
+const CATS = [
+  ["домашние дела","🏡 Домашние дела"],["vibe-coding","💻 Vibe-Coding"],["цветы","🌸 Цветы"],
+  ["аниме","😳 Аниме"],["сериал","📺 Сериал"],["игры","🎮 Игры"],["работа","💼 Работа"],
+  ["книги ru","📚 Книги (RU)"],["youtube-развлекательный","📺 YouTube-развлек."],["блог","✍️ Блог"],
+  ["дневной сон","😴 Дневной сон"],["спортзал","💪 Спортзал"],["друзья","👥 Друзья"],["мото","🏍️ Мото"],
+  ["3d печать","🖨️ 3D Печать"],["overwatch","🔫 Overwatch"],["кино","🍿 Кино"],["dnd","🎲 DnD"],
+  ["семья","👨‍👩‍👧‍👦 Семья"],["клоя","📌 Клоя"],["youtube-познавательный","🧠 YouTube-познават."],
+  ["монтаж","✂️ Монтаж"],["3d моделирование","🖥️ 3D Моделирование"],["музыка","🎵 Музыка"],
+  ["shorts","📱 Shorts"],["видеография","🎬 Видеография"],["twitch","😈 Twitch"],
+  ["книги en","📖 Книги (EN)"],["изучение английского","🇬🇧 Англ. язык"],["заметки","📝 Заметки"],
+  ["манга","📰 Манга"],["лего","🧱 Лего"]
+];
+// 0.5–3.5 шагом 0.5, дальше по часу до 15
+const PRESETS = [0.5, 1, 1.5, 2, 2.5, 3, 3.5, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15];
+const VARIANTS = { A: "Степперы везде", B: "Тап → пресеты", C: "Гибрид" };
+
+// состояние общее между вариантами — переключай туда-сюда посреди «ритуала»
+let values = { "vibe-coding": 2, "спортзал": 1.5 };   // пара предзаполненных для наглядности
+let expanded = null;                                   // key раскрытой панели пресетов
+let variant = new URLSearchParams(location.search).get("variant") || "A";
+if (!VARIANTS[variant]) variant = "A";
+
+const fmt = v => (v === Math.trunc(v) ? String(v) : String(v));
+
+function set(key, v) {
+  if (v <= 0) delete values[key]; else values[key] = Math.min(24, Math.round(v * 2) / 2);
+  render();
+}
+
+function tileHTML(key, name) {
+  const v = values[key];
+  const filled = v != null;
+  if (variant === "A") {
+    return `<div class="tile ${filled ? "filled" : ""}">
+      <div class="name">${name}</div>
+      <div class="stepper">
+        <button onclick="event.stopPropagation(); set('${key}', ${(v||0)} - 0.5)">−</button>
+        <span class="num ${filled ? "" : "zero"}">${filled ? fmt(v) + " ч" : "—"}</span>
+        <button onclick="event.stopPropagation(); set('${key}', ${(v||0)} + 0.5)">+</button>
+      </div>
+    </div>`;
+  }
+  if (variant === "B") {
+    return `<div class="tile ${filled ? "filled" : ""}" onclick="toggle('${key}')">
+      <div class="name">${name}</div>
+      <div class="val ${filled ? "" : "empty"}">${filled ? "✓ " + fmt(v) + " ч" : "тап — выбрать"}</div>
+    </div>`;
+  }
+  // C: гибрид
+  if (!filled) {
+    return `<div class="tile" onclick="toggle('${key}')">
+      <div class="name">${name}</div>
+      <div class="val empty">тап — выбрать</div>
+    </div>`;
+  }
+  return `<div class="tile filled" onclick="toggle('${key}')">
+    <div class="name">${name}</div>
+    <div class="stepper">
+      <button onclick="event.stopPropagation(); set('${key}', ${v} - 0.5)">−</button>
+      <span class="num">${fmt(v)} ч</span>
+      <button onclick="event.stopPropagation(); set('${key}', ${v} + 0.5)">+</button>
+    </div>
+  </div>`;
+}
+
+function presetsHTML(key, name) {
+  const chips = PRESETS.map(p =>
+    `<button onclick="pick('${key}', ${p})">${fmt(p)}</button>`).join("");
+  return `<div class="presets">
+    <div class="title">${name} — сколько часов?</div>
+    ${chips}
+    <button onclick="customInput('${key}')">✏️</button>
+    <button class="clear" onclick="pick('${key}', 0)">✕</button>
+  </div>`;
+}
+
+function toggle(key) { expanded = (expanded === key ? null : key); render(); }
+function pick(key, v) { expanded = null; set(key, v); }
+function customInput(key) {
+  const raw = prompt("Часы (0–24, можно 1.5 или 1,5):");
+  if (raw == null) return;
+  const v = parseFloat(raw.replace(",", "."));
+  if (!isNaN(v)) pick(key, v);
+}
+
+function render() {
+  const grid = document.getElementById("grid");
+  let html = "";
+  for (const [key, name] of CATS) {
+    html += tileHTML(key, name);
+    if ((variant === "B" || variant === "C") && expanded === key) html += presetsHTML(key, name);
+  }
+  grid.innerHTML = html;
+  const total = Object.values(values).reduce((a, b) => a + b, 0);
+  const cnt = Object.keys(values).length;
+  document.getElementById("total").innerHTML = `<b>${fmt(total)} ч</b> · ${cnt} актив.`;
+  document.getElementById("vlabel").textContent = `${variant} — ${VARIANTS[variant]}`;
+}
+
+function cycle(dir) {
+  const keys = Object.keys(VARIANTS);
+  variant = keys[(keys.indexOf(variant) + dir + keys.length) % keys.length];
+  expanded = null;
+  history.replaceState(null, "", "?variant=" + variant);
+  render();
+}
+document.addEventListener("keydown", e => {
+  if (/INPUT|TEXTAREA/.test(document.activeElement.tagName)) return;
+  if (e.key === "ArrowLeft") cycle(-1);
+  if (e.key === "ArrowRight") cycle(1);
+});
+
+function resetAll() { values = {}; expanded = null; render(); }
+function fakeDate(btn, label) {
+  document.querySelectorAll(".date-switch button").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  document.getElementById("title").textContent = label;
+}
+let toastTimer;
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 1800);
+}
+render();
+</script>
+</body>
+</html>
