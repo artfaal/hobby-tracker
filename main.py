@@ -39,6 +39,7 @@ def build_bot() -> Application:
 
 async def amain() -> None:
     runtime.init_runtime()
+    await runtime.reconcile_cache()  # Sheets истина: подтянуть ручные правки, prune старых дат
 
     bot_app = build_bot()
     await bot_app.initialize()
