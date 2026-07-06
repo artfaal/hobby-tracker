@@ -8,7 +8,7 @@ import datetime as dt
 import logging
 
 from .data.daycache import DayCache, merged
-from .data.files import save_hobby_to_history
+from .data.files import norm_hobby, save_hobby_to_history
 from .data.journal import Journal
 from .data.sheets import get_sheets_manager, parse_days
 from .utils.config import DAYCACHE_FILE, JOURNAL_FILE, JOURNAL_OFFSET_FILE
@@ -38,6 +38,7 @@ def _in_window(date: str, window: int = 7) -> bool:
 
 
 def record_entry(date: str, hobby: str, hours: float, source: str) -> int:
+    hobby = norm_hobby(hobby)  # единое ключевое пространство (регистр, ё→е)
     journal.append(date, hobby, hours, source)
     if _in_window(date):
         cache.apply_entry(date, hobby, hours)

@@ -27,3 +27,12 @@ def test_parse_days_bad_cell_ignored():
 
 def test_parse_days_empty_sheet():
     assert parse_days([], ["2026-07-04"]) == {"2026-07-04": {}}
+
+
+def test_parse_days_normalizes_header_keys():
+    """Регресс: колонка «книги RU» в таблице не должна плодить дубль
+    ключа «книги ru» — весь код живёт в нормализованном пространстве"""
+    vals = [["Дата", "книги RU", "Ёлки"], ["2026-07-04", "5", "1"]]
+    assert parse_days(vals, ["2026-07-04"]) == {
+        "2026-07-04": {"книги ru": 5.0, "елки": 1.0}
+    }

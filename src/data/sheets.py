@@ -7,7 +7,11 @@ from .files import norm_hobby
 
 
 def parse_days(all_values: list[list[str]], dates: list[str]) -> dict[str, dict[str, float]]:
-    """Разбирает результат get_all_values() в {дата: {хобби: часы}}. Pure, без сети."""
+    """Разбирает результат get_all_values() в {дата: {хобби: часы}}. Pure, без сети.
+
+    Ключи хобби НОРМАЛИЗУЮТСЯ (norm_hobby): заголовок колонки в таблице может
+    отличаться регистром («книги RU»), а весь остальной код живёт в
+    нормализованном ключевом пространстве — иначе кэш ловит дубли."""
     result: dict[str, dict[str, float]] = {d: {} for d in dates}
     if not all_values:
         return result
@@ -20,7 +24,7 @@ def parse_days(all_values: list[list[str]], dates: list[str]) -> dict[str, dict[
         for j, header in enumerate(headers[1:], start=1):
             if j < len(row) and row[j].strip():
                 try:
-                    day[header] = float(row[j].replace(",", "."))
+                    day[norm_hobby(header)] = float(row[j].replace(",", "."))
                 except ValueError:
                     continue
         result[row[0]] = day
@@ -117,16 +121,17 @@ class SheetsManager:
                 if date_str == target_date:
                     row_values = self.ws.row_values(i)
                     data = {}
-                    
+
+                    # Ключи нормализуем (см. parse_days) — единое ключевое пространство
                     for j, header in enumerate(headers[1:], start=1):  # Пропускаем колонку даты
                         if j < len(row_values) and row_values[j]:
                             try:
-                                data[header] = float(row_values[j].replace(',', '.'))
+                                data[norm_hobby(header)] = float(row_values[j].replace(',', '.'))
                             except ValueError:
-                                data[header] = 0.0
+                                data[norm_hobby(header)] = 0.0
                         else:
-                            data[header] = 0.0
-                    
+                            data[norm_hobby(header)] = 0.0
+
                     return data
             return {}
         except Exception:
