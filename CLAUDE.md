@@ -11,7 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 python main.py                 # локальный запуск (нужны .env + service_account.json)
-pytest tests/                  # тесты (33 шт.); зависимости: pip install -r requirements-dev.txt
+pytest tests/                  # тесты (36 шт.); зависимости: pip install -r requirements-dev.txt
 docker compose up -d           # прод-запуск; caddy-docker-proxy подхватывает по labels
 docker compose logs -f         # логи
 ```
@@ -47,7 +47,9 @@ Mini App (API) ──┘         │                                            
 - `src/data/daycache.py` — снапшот последних 7 дней (`data/cache/days.json`) +
   `merged()` — оверлей несинканного журнала. Старше 7 дней — прямое чтение Sheets.
 - `src/api/` — `auth.py` (HMAC initData, allowlist `ALLOWED_USER_IDS`),
-  `server.py` (`GET /api/hobbies`, `GET /api/day/{date}`, `POST /api/entry`).
+  `server.py` (`GET /api/hobbies`, `GET /api/day/{date}`, `POST /api/entry`,
+  `GET /api/queue`). Ответы `/api/*` несут `queue_pending` (число несинканных
+  записей); лёгкий `GET /api/queue` фронт опрашивает после записи, пока не 0.
 - `frontend/index.html` — Mini App, vanilla JS без сборки. Пресеты часов
   захардкожены там (0.5–3.5 шагом 0.5, дальше целыми до 15); `data/stars.txt`
   влияет только на кнопки бота.
