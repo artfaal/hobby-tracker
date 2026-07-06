@@ -13,3 +13,8 @@ data/*.txt
 
 # Backup files
 data/*.backup_*
+
+# Журнал и кэш (runtime-данные)
+data/journal.jsonl
+data/journal.offset
+data/cache/

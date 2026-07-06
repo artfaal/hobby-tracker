@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Hobby Tracker</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  :root {
+    --bg: var(--tg-theme-bg-color, #17212b);
+    --card: var(--tg-theme-secondary-bg-color, #232e3c);
+    --card-filled: #2b5278;
+    --text: var(--tg-theme-text-color, #f5f5f5);
+    --muted: var(--tg-theme-hint-color, #708499);
+    --accent: var(--tg-theme-button-color, #5eb5f7);
+    --accent-text: var(--tg-theme-button-text-color, #08131d);
+    --chip: #3a4a5c;
+    --danger: #e26a6a;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font-family: -apple-system, Roboto, "Segoe UI", sans-serif; }
+  header { padding: 12px 14px 8px; display: flex; align-items: center;
+           justify-content: space-between; position: sticky; top: 0;
+           background: var(--bg); z-index: 5; }
+  header h1 { font-size: 16px; margin: 0; font-weight: 600; }
+  .date-switch { display: flex; gap: 6px; }
+  .date-switch button { background: var(--chip); border: none; color: var(--muted);
+    border-radius: 14px; padding: 5px 10px; font-size: 13px; cursor: pointer; }
+  .date-switch button.active { background: var(--accent); color: var(--accent-text); font-weight: 600; }
+  #datepick { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  main { padding: 8px 10px 90px; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .tile { background: var(--card); border-radius: 12px; padding: 10px;
+          display: flex; flex-direction: column; gap: 6px; cursor: pointer;
+          border: 1px solid transparent; user-select: none; }
+  .tile.filled { background: var(--card-filled); border-color: #3d6d99; }
+  .tile .name { font-size: 13.5px; line-height: 1.25; }
+  .tile .val { font-size: 13px; color: var(--accent); font-weight: 700; min-height: 16px; }
+  .tile .val.empty { color: var(--muted); font-weight: 400; }
+  .presets { grid-column: 1 / -1; background: rgba(0,0,0,.25); border-radius: 12px;
+             padding: 10px; display: flex; flex-wrap: wrap; gap: 6px; }
+  .presets .title { width: 100%; font-size: 13px; color: var(--muted); }
+  .presets button { border: none; border-radius: 9px; background: var(--chip);
+    color: var(--text); padding: 9px 0; font-size: 14.5px; font-weight: 600;
+    cursor: pointer; flex: 1 0 calc(20% - 6px); min-width: 52px; }
+  .presets button:active { background: var(--accent); color: var(--accent-text); }
+  .presets button.clear { background: #46323a; color: var(--danger); }
+  footer { position: fixed; bottom: 0; left: 0; right: 0; background: var(--card);
+           padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+           display: flex; align-items: center; justify-content: space-between; z-index: 5; }
+  footer .total b { color: var(--accent); }
+  footer .queue { font-size: 12.5px; color: var(--muted); }
+  footer .queue.busy { color: #e2b93b; }
+  .toast { position: fixed; top: 12px; left: 50%; transform: translateX(-50%);
+           background: var(--danger); color: #fff; padding: 8px 16px; border-radius: 10px;
+           font-size: 13.5px; z-index: 20; opacity: 0; transition: opacity .2s; pointer-events: none; }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title">…</h1>
+  <div class="date-switch">
+    <button id="btn-today">Сегодня</button>
+    <button id="btn-yest">Вчера</button>
+    <button id="btn-cal">📅</button>
+    <input type="date" id="datepick">
+  </div>
+</header>
+<main><div class="grid" id="grid"></div></main>
+<footer>
+  <div class="total" id="total"></div>
+  <div class="queue" id="queue"></div>
+</footer>
+<div class="toast" id="toast"></div>
+
+<script>
+const tg = window.Telegram.WebApp;
+tg.ready(); tg.expand();
+
+// 0.5–3.5 шагом 0.5, дальше по часу до 15 (вердикт прототипа)
+const PRESETS = [0.5,1,1.5,2,2.5,3,3.5,4,5,6,7,8,9,10,11,12,13,14,15];
+
+let hobbies = [];        // [{key, display}]
+let values = {};         // {key: hours} текущего дня (>0 = заполнено)
+let date = null;         // выбранная дата YYYY-MM-DD
+let defaultDate = null;  // «сегодня» с учётом правила 6 утра (с бэка)
+let expanded = null;
+let queuePending = 0;
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, { ...opts, headers: {
+    "Telegram-Init-Data": tg.initData,
+    "Content-Type": "application/json", ...(opts.headers || {}) } });
+  if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+  return r.json();
+}
+
+const fmt = v => String(v);
+const addDays = (iso, n) => {
+  const d = new Date(iso + "T12:00:00");
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0, 10);
+};
+
+async function loadDay(newDate) {
+  date = newDate;
+  const resp = await api(`/api/day/${date}`);
+  values = {};
+  for (const [k, v] of Object.entries(resp.values)) if (v > 0) values[k] = v;
+  queuePending = resp.queue_pending;
+  expanded = null;
+  render();
+}
+
+async function pick(key, v) {
+  expanded = null;
+  const prev = values[key];
+  if (v > 0) values[key] = v; else delete values[key];
+  render();  // optimistic
+  try {
+    const resp = await api("/api/entry", { method: "POST",
+      body: JSON.stringify({ date, hobby: key, hours: v }) });
+    queuePending = resp.queue_pending;
+  } catch (e) {
+    if (prev != null) values[key] = prev; else delete values[key];  // откат
+    toast("Не записалось — проверь сеть");
+  }
+  render();
+}
+
+function customInput(key) {
+  const raw = prompt("Часы (0–24, можно 1.5 или 1,5):");
+  if (raw == null) return;
+  const v = parseFloat(raw.replace(",", "."));
+  if (isNaN(v) || v < 0 || v > 24) { toast("Число 0–24"); return; }
+  pick(key, Math.round(v * 2) / 2);
+}
+
+function render() {
+  document.getElementById("title").textContent =
+    date === defaultDate ? "Сегодня" :
+    date === addDays(defaultDate, -1) ? "Вчера" : date;
+  document.getElementById("btn-today").classList.toggle("active", date === defaultDate);
+  document.getElementById("btn-yest").classList.toggle("active", date === addDays(defaultDate, -1));
+
+  let html = "";
+  for (const { key, display } of hobbies) {
+    const v = values[key];
+    const filled = v != null;
+    html += `<div class="tile ${filled ? "filled" : ""}" data-key="${key}">
+      <div class="name">${display}</div>
+      <div class="val ${filled ? "" : "empty"}">${filled ? "✓ " + fmt(v) + " ч" : "тап — выбрать"}</div>
+    </div>`;
+    if (expanded === key) {
+      const chips = PRESETS.map(p => `<button data-pick="${p}">${fmt(p)}</button>`).join("");
+      html += `<div class="presets" data-key="${key}">
+        <div class="title">${display} — сколько часов?</div>${chips}
+        <button data-custom="1">✏️</button>
+        <button class="clear" data-pick="0">✕</button>
+      </div>`;
+    }
+  }
+  document.getElementById("grid").innerHTML = html;
+
+  const total = Object.values(values).reduce((a, b) => a + b, 0);
+  document.getElementById("total").innerHTML =
+    `<b>${fmt(Math.round(total * 2) / 2)} ч</b> · ${Object.keys(values).length} актив.`;
+  const q = document.getElementById("queue");
+  q.textContent = queuePending > 0 ? `⏳ ${queuePending} в очереди` : "✓ синк";
+  q.classList.toggle("busy", queuePending > 0);
+}
+
+document.getElementById("grid").addEventListener("click", e => {
+  const presetBtn = e.target.closest("[data-pick]");
+  if (presetBtn) {
+    pick(presetBtn.closest(".presets").dataset.key, parseFloat(presetBtn.dataset.pick));
+    return;
+  }
+  if (e.target.closest("[data-custom]")) {
+    customInput(e.target.closest(".presets").dataset.key);
+    return;
+  }
+  const tile = e.target.closest(".tile");
+  if (tile) {
+    expanded = expanded === tile.dataset.key ? null : tile.dataset.key;
+    render();
+  }
+});
+
+document.getElementById("btn-today").onclick = () => loadDay(defaultDate);
+document.getElementById("btn-yest").onclick = () => loadDay(addDays(defaultDate, -1));
+document.getElementById("btn-cal").onclick = () => {
+  const p = document.getElementById("datepick");
+  p.showPicker ? p.showPicker() : p.click();
+};
+document.getElementById("datepick").onchange = e => e.target.value && loadDay(e.target.value);
+
+let toastTimer;
+function toast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 2500);
+}
+
+(async function init() {
+  try {
+    const cfg = await api("/api/hobbies");
+    hobbies = cfg.hobbies;
+    defaultDate = cfg.default_date;
+    queuePending = cfg.queue_pending;
+    await loadDay(defaultDate);
+  } catch (e) {
+    document.getElementById("grid").innerHTML =
+      `<div style="grid-column:1/-1;color:var(--danger);padding:20px">Ошибка загрузки: ${e.message}</div>`;
+  }
+})();
+</script>
+</body>
+</html>
