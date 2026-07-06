@@ -6,6 +6,27 @@ from ..utils.config import SERVICE_ACCOUNT_FILE, SCOPES, SPREADSHEET_ID, SHEET_N
 from .files import norm_hobby
 
 
+def parse_days(all_values: list[list[str]], dates: list[str]) -> dict[str, dict[str, float]]:
+    """Разбирает результат get_all_values() в {дата: {хобби: часы}}. Pure, без сети."""
+    result: dict[str, dict[str, float]] = {d: {} for d in dates}
+    if not all_values:
+        return result
+    headers = all_values[0]
+    wanted = set(dates)
+    for row in all_values[1:]:
+        if not row or row[0] not in wanted:
+            continue
+        day: dict[str, float] = {}
+        for j, header in enumerate(headers[1:], start=1):
+            if j < len(row) and row[j].strip():
+                try:
+                    day[header] = float(row[j].replace(",", "."))
+                except ValueError:
+                    continue
+        result[row[0]] = day
+    return result
+
+
 class SheetsManager:
     def __init__(self):
         self.creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
@@ -115,3 +136,22 @@ class SheetsManager:
         """Получает общую сумму баллов за дату"""
         data = self.get_day_data(target_date)
         return sum(data.values())
+
+    def get_days_bulk(self, dates: list[str]) -> dict[str, dict[str, float]]:
+        """Данные за несколько дат ОДНИМ запросом к API"""
+        try:
+            all_values = self.ws.get_all_values()
+        except Exception:
+            return {d: {} for d in dates}
+        return parse_days(all_values, dates)
+
+
+_manager: "SheetsManager | None" = None
+
+
+def get_sheets_manager() -> "SheetsManager":
+    """Ленивый синглтон — создаётся при первом обращении, не при импорте"""
+    global _manager
+    if _manager is None:
+        _manager = SheetsManager()
+    return _manager
