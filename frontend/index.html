@@ -107,8 +107,17 @@ const addDays = (iso, n) => {
 };
 
 async function loadDay(newDate) {
+  let resp;
+  try {
+    resp = await api(`/api/day/${newDate}`);
+  } catch (e) {
+    // Дату НЕ переключаем: плитки на экране остаются согласованы с заголовком
+    if (date === null) date = newDate;  // первая загрузка — чтобы заголовок не был пуст
+    toast("Не загрузилось — проверь сеть");
+    render();
+    return;
+  }
   date = newDate;
-  const resp = await api(`/api/day/${date}`);
   values = {};
   for (const [k, v] of Object.entries(resp.values)) if (v > 0) values[k] = v;
   queuePending = resp.queue_pending;
