@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   hobby-tracker:
     build: .
@@ -11,12 +9,16 @@ services:
       - SHEET_NAME=${SHEET_NAME:-Данные}
       - TIMEZONE=${TIMEZONE:-Europe/Moscow}
       - TZ=${TIMEZONE:-Europe/Moscow}
+      - WEBAPP_URL=${WEBAPP_URL:-https://hobby.artfaal.ru}
+      - ALLOWED_USER_IDS=${ALLOWED_USER_IDS}
     volumes:
       - ./data:/app/data
       - ./service_account.json:/app/service_account.json:ro
+    labels:
+      caddy: hobby.artfaal.ru
+      caddy.reverse_proxy: "{{upstreams 8000}}"
     networks:
-      - hobby-network
-
+      - caddy
     logging:
       driver: "json-file"
       options:
@@ -24,7 +26,6 @@ services:
         max-file: "3"
         compress: "true"
 
-
 networks:
-  hobby-network:
-    driver: bridge
+  caddy:
+    external: true

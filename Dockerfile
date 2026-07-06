@@ -16,6 +16,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Копируем исходный код
 COPY src/ ./src/
 COPY main.py .
+COPY frontend/ ./frontend/
 
 # Создаем директории для данных
 RUN mkdir -p data
