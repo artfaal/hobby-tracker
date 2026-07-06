@@ -16,20 +16,17 @@ from .messages import (
     format_stats_message, get_date_display_name
 )
 from ..data.files import (
-    save_hobby_to_history, get_all_hobbies, get_hobby_display_name, get_all_aliases, add_alias
+    get_all_hobbies, get_hobby_display_name, get_all_aliases, add_alias
 )
 from ..data.reminders import (
     add_reminder, remove_reminder, get_user_reminders
 )
-from ..data.sheets import SheetsManager
+from ..data.sheets import get_sheets_manager
 from ..utils.dates import date_for_time
-from ..utils.config import SPREADSHEET_ID
+from .. import runtime
 
 # Состояние пользователей (в реальном приложении лучше использовать Redis/DB)
 user_states = {}
-
-# Глобальный экземпляр SheetsManager
-sheets = SheetsManager()
 
 # Логгер для этого модуля
 logger = logging.getLogger(__name__)
@@ -189,37 +186,24 @@ async def handle_stars_selection(query, user_id: int, data: str):
     parts = data.split(":")
     if len(parts) >= 4:
         hobby_key = parts[1]
-        stars = float(parts[2])  # Теперь поддерживаем десятичные значения
+        stars = float(parts[2])  # Поддерживаем десятичные значения
         target_date = parts[3]
-        
-        # Сохраняем увлечение в историю
-        save_hobby_to_history(hobby_key)
-        
-        # Записываем в Google Sheets
-        score_values = {hobby_key: stars}
-        
-        # Показываем результат
+
+        # Запись через журнал-буфер: мгновенно, Sheets дольёт воркер
+        runtime.record_entry(target_date, hobby_key, stars, source="bot")
+
         hobby_display = get_hobby_display_name(hobby_key)
         result_text = format_hobby_stars_result(hobby_display, stars)
-        
-        await query.edit_message_text(result_text)
-        
-        # Возвращаемся к списку увлечений
+
+        # Один edit: результат + меню, без задержек
         current_date = date_for_time()
         show_today = target_date != current_date
         keyboard = create_hobby_keyboard(show_today_button=show_today)
         date_display = get_date_display_name(target_date)
-        await asyncio.sleep(0.5)
         await query.edit_message_text(
-            f"🚀 Заполнение на {date_display}\n\nВыберите следующее увлечение:",
+            f"{result_text}\n\n🚀 Заполнение на {date_display}\nВыберите следующее увлечение:",
             reply_markup=keyboard
         )
-        
-        # Записываем в Google Sheets в фоне
-        try:
-            sheets.write_values(score_values, target_date)
-        except Exception:
-            pass  # Игнорируем ошибки для скорости
 
 
 async def handle_date_selection(query, user_id: int, data: str):
@@ -277,9 +261,9 @@ async def handle_stats_selection(query, user_id: int, data: str):
 async def show_stats_for_date(query, target_date: str, show_stats_keyboard: bool = True):
     """Показывает статистику за указанную дату"""
     try:
-        data = sheets.get_day_data(target_date)
-        total = sheets.get_total_for_date(target_date)
-        
+        data = await runtime.get_day_values(target_date)
+        total = sum(data.values())
+
         message = format_stats_message(target_date, data, total)
         
         # Сначала отправляем статистику
@@ -581,29 +565,18 @@ def create_unicode_chart(values: list, max_height: int = 8) -> str:
     return chart
 
 
-def get_week_data() -> dict:
-    """Получает данные за последние 7 дней"""
+async def get_week_data() -> dict:
+    """Данные за последние 7 дней ОДНИМ запросом к Sheets"""
     from datetime import datetime, timedelta
-    
-    week_data = {}
-    today = datetime.now()
-    
-    for i in range(7):
-        date = today - timedelta(days=i)
-        date_str = date.strftime('%Y-%m-%d')
-        try:
-            day_data = sheets.get_day_data(date_str)
-            week_data[date_str] = day_data if day_data else {}
-        except:
-            week_data[date_str] = {}
-    
-    return week_data
+    dates = [(datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(7)]
+    async with runtime.sheets_lock:
+        return await asyncio.to_thread(lambda: get_sheets_manager().get_days_bulk(dates))
 
 
 async def show_weekly_analytics(query):
     """Показывает еженедельную аналитику"""
     try:
-        week_data = get_week_data()
+        week_data = await get_week_data()
         
         # Собираем статистику по увлечениям
         hobby_totals = {}
@@ -620,9 +593,8 @@ async def show_weekly_analytics(query):
             dates.append(date_str)
             
             for hobby, hours in day_data.items():
-                if hobby not in hobby_totals:
-                    hobby_totals[hobby] = 0
-                hobby_totals[hobby] += hours
+                if hours > 0:
+                    hobby_totals[hobby] = hobby_totals.get(hobby, 0) + hours
         
         # Создаем график недельной активности
         chart = create_unicode_chart(daily_totals)
@@ -675,27 +647,26 @@ async def show_top3_analytics(query):
     """Показывает топ-3 активности за разные периоды"""
     try:
         from datetime import datetime, timedelta
-        
+
         # Данные за неделю
-        week_data = get_week_data()
+        week_data = await get_week_data()
         week_totals = {}
         for day_data in week_data.values():
             for hobby, hours in day_data.items():
-                week_totals[hobby] = week_totals.get(hobby, 0) + hours
-        
-        # Данные за месяц (последние 30 дней)
-        month_totals = {}
+                if hours > 0:
+                    week_totals[hobby] = week_totals.get(hobby, 0) + hours
+
+        # Данные за месяц (последние 30 дней) — ОДНИМ запросом
         today = datetime.now()
-        for i in range(30):
-            date = today - timedelta(days=i)
-            date_str = date.strftime('%Y-%m-%d')
-            try:
-                day_data = sheets.get_day_data(date_str)
-                if day_data:
-                    for hobby, hours in day_data.items():
-                        month_totals[hobby] = month_totals.get(hobby, 0) + hours
-            except:
-                continue
+        month_dates = [(today - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(30)]
+        async with runtime.sheets_lock:
+            month_data = await asyncio.to_thread(
+                lambda: get_sheets_manager().get_days_bulk(month_dates))
+        month_totals = {}
+        for day_data in month_data.values():
+            for hobby, hours in day_data.items():
+                if hours > 0:
+                    month_totals[hobby] = month_totals.get(hobby, 0) + hours
         
         message = "🏆 **Топ-3 активности**\n\n"
         
@@ -795,40 +766,20 @@ async def text_message_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                 return
             
             logger.info(f"Custom stars value '{stars_value}' for hobby '{hobby_name}' by user {username} ({user_id}) on {target_date}")
-            
-            # Сохраняем увлечение в историю
-            save_hobby_to_history(hobby_name)
-            
-            # Записываем в Google Sheets
-            score_values = {hobby_name: stars_value}
-            
-            # Показываем результат
+
+            # Запись через журнал-буфер: мгновенно, Sheets дольёт воркер
+            runtime.record_entry(target_date, hobby_name, stars_value, source="bot")
+
             hobby_display = get_hobby_display_name(hobby_name)
-            result_text = format_hobby_stars_result(hobby_display, stars_value)
-            
-            await update.message.reply_text(result_text)
-            
-            # Сбрасываем состояние
+            await update.message.reply_text(format_hobby_stars_result(hobby_display, stars_value))
+
             user_states.pop(user_id, None)
-            
-            # Возвращаемся к главному меню
-            current_date = date_for_time()
             keyboard = create_hobby_keyboard()
-            date_display = get_date_display_name(current_date)
+            date_display = get_date_display_name(date_for_time())
             await update.message.reply_text(
-                f"🚀 Заполнение на {date_display}\n\nВыберите увлечение:", 
+                f"🚀 Заполнение на {date_display}\n\nВыберите увлечение:",
                 reply_markup=keyboard
             )
-            
-            # Асинхронно записываем в Google Sheets
-            try:
-                await asyncio.create_task(
-                    asyncio.to_thread(sheets.write_values, score_values, target_date)
-                )
-                logger.info(f"Successfully wrote custom stars data to sheets: {score_values}")
-            except Exception as e:
-                logger.error(f"Failed to write custom stars data to sheets: {e}")
-            
             return
             
         except ValueError:

@@ -1,15 +1,18 @@
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, WebAppInfo
 from typing import List
 
 from ..data.files import get_recent_hobbies, get_all_hobbies, get_hobby_display_name, get_all_aliases, add_alias
 from ..data.reminders import get_user_reminders
 from ..data.stars import load_star_values
+from ..utils.config import WEBAPP_URL
 from ..utils.dates import get_date_list
 
 
 def create_hobby_keyboard(show_today_button: bool = False) -> InlineKeyboardMarkup:
     """Создает клавиатуру с последними 10 увлечениями"""
     buttons = []
+    if WEBAPP_URL:
+        buttons.append([InlineKeyboardButton("⚡ Открыть Mini App", web_app=WebAppInfo(url=WEBAPP_URL))])
     recent_hobbies = get_recent_hobbies(limit=10)
     
     if not recent_hobbies:
