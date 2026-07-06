@@ -53,6 +53,13 @@ def test_entry_validation(client):
         assert r.status_code in (400, 422), payload
 
 
+def test_queue_endpoint(client):
+    assert client.get("/api/queue", headers=AUTH).json() == {"queue_pending": 0}
+    client.post("/api/entry", headers=AUTH,
+                json={"date": "2026-07-06", "hobby": "игры", "hours": 1})
+    assert client.get("/api/queue", headers=AUTH).json() == {"queue_pending": 1}
+
+
 def test_no_auth_401(client):
     assert client.get("/api/hobbies").status_code == 401
 

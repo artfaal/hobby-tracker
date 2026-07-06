@@ -125,11 +125,27 @@ async function pick(key, v) {
     const resp = await api("/api/entry", { method: "POST",
       body: JSON.stringify({ date, hobby: key, hours: v }) });
     queuePending = resp.queue_pending;
+    watchQueue();  // воркер сливает за ~1с — дожидаемся реального нуля
   } catch (e) {
     if (prev != null) values[key] = prev; else delete values[key];  // откат
     toast("Не записалось — проверь сеть");
   }
   render();
+}
+
+// Опрос очереди после записи: снимок в ответе POST сделан ДО слива воркером,
+// поэтому там всегда ≥1. Допрашиваем /api/queue, пока не увидим 0.
+let queueTimer = null;
+function watchQueue(attempt = 0) {
+  clearTimeout(queueTimer);
+  if (queuePending === 0 || attempt >= 20) { render(); return; }
+  queueTimer = setTimeout(async () => {
+    try {
+      queuePending = (await api("/api/queue")).queue_pending;
+    } catch (e) { /* сеть моргнула — следующая попытка */ }
+    render();
+    watchQueue(attempt + 1);
+  }, attempt < 5 ? 700 : 3000);
 }
 
 function customInput(key) {
@@ -170,7 +186,9 @@ function render() {
   document.getElementById("total").innerHTML =
     `<b>${fmt(Math.round(total * 2) / 2)} ч</b> · ${Object.keys(values).length} актив.`;
   const q = document.getElementById("queue");
-  q.textContent = queuePending > 0 ? `⏳ ${queuePending} в очереди` : "✓ синк";
+  q.textContent = queuePending > 0
+    ? `⏳ пишу в таблицу… (${queuePending})`
+    : "✓ всё в таблице";
   q.classList.toggle("busy", queuePending > 0);
 }
 

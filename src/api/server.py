@@ -61,6 +61,11 @@ def create_app(serve_static: bool = True) -> FastAPI:
         pending = runtime.record_entry(req.date, req.hobby, req.hours, source="miniapp")
         return {"ok": True, "queue_pending": pending}
 
+    @app.get("/api/queue")
+    async def queue(_: dict = Depends(require_tg_auth)):
+        """Лёгкий статус очереди — фронт опрашивает после записи, пока не 0"""
+        return {"queue_pending": runtime.pending_count()}
+
     if serve_static:
         app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")
     return app
