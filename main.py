@@ -18,7 +18,7 @@ from src.bot.handlers import (
     button_callback, text_message_handler
 )
 from src.data.files import create_sample_aliases
-from src.utils.config import BOT_TOKEN
+from src.utils.config import BOT_TOKEN, validate_config
 from src.utils.scheduler import start_scheduler, stop_scheduler
 
 
@@ -40,6 +40,7 @@ def main():
     logger.info("🚀 Запуск Hobby Tracker Bot...")
     
     try:
+        validate_config()
         # Создаем пример файла алиасов при первом запуске
         create_sample_aliases()
         logger.info("✅ Конфигурация готова")

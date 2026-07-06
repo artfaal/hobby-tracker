@@ -4,3 +4,5 @@ google-auth==2.35.0
 python-dotenv==1.0.1
 APScheduler==3.10.4
 
+fastapi==0.115.6
+uvicorn==0.34.0
