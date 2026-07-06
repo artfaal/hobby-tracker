@@ -7,7 +7,6 @@ from telegram.error import TelegramError
 
 from .config import TZ_NAME
 from ..data.reminders import get_reminders_for_hour
-from ..data.sheets import SheetsManager
 from ..utils.dates import date_for_time
 from .dates import get_tz
 
@@ -16,7 +15,6 @@ class ReminderScheduler:
     def __init__(self, bot_token: str):
         self.bot = Bot(token=bot_token)
         self.scheduler = AsyncIOScheduler(timezone=get_tz())
-        self.sheets = SheetsManager()
         
     def start(self):
         """Запускает планировщик"""
@@ -51,9 +49,10 @@ class ReminderScheduler:
     async def _send_reminder(self, user_id: int):
         """Отправляет напоминание конкретному пользователю"""
         try:
-            # Получаем статистику за сегодня
+            # Получаем статистику за сегодня (кэш + оверлей журнала)
+            from .. import runtime
             today = date_for_time()
-            today_data = self.sheets.get_day_data(today)
+            today_data = await runtime.get_day_values(today)
             today_total = sum(today_data.values()) if today_data else 0
             
             # Формируем сообщение с полной статистикой
